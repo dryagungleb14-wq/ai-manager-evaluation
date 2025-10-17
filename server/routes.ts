@@ -221,6 +221,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/analyses - Получить все анализы
+  app.get("/api/analyses", async (req, res) => {
+    try {
+      const analyses = await storage.getAllAnalyses();
+      res.json(analyses);
+    } catch (error) {
+      console.error("Get analyses error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Ошибка получения анализов",
+      });
+    }
+  });
+
+  // GET /api/analyses/:id - Получить анализ по ID
+  app.get("/api/analyses/:id", async (req, res) => {
+    try {
+      const analysis = await storage.getAnalysis(req.params.id);
+      if (!analysis) {
+        return res.status(404).json({ error: "Анализ не найден" });
+      }
+      res.json(analysis);
+    } catch (error) {
+      console.error("Get analysis error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Ошибка получения анализа",
+      });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

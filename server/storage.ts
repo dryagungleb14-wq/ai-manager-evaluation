@@ -14,7 +14,16 @@ export interface IStorage {
   // Analysis history
   saveAnalysis(analysis: AnalysisReport, checklistId?: string, transcript?: string): Promise<string>;
   getAnalysis(id: string): Promise<AnalysisReport | undefined>;
-  getAllAnalyses(): Promise<AnalysisReport[]>;
+  getAllAnalyses(): Promise<Array<{
+    id: string;
+    checklistId?: string;
+    source: string;
+    language: string;
+    transcript: string;
+    analyzedAt: Date;
+    checklistReport: any;
+    objectionsReport: any;
+  }>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -149,13 +158,19 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getAllAnalyses(): Promise<AnalysisReport[]> {
+  async getAllAnalyses() {
     const allAnalyses = await db
       .select()
       .from(analyses)
       .orderBy(analyses.analyzedAt);
 
     return allAnalyses.map((a) => ({
+      id: a.id.toString(),
+      checklistId: a.checklistId?.toString(),
+      source: a.source,
+      language: a.language,
+      transcript: a.transcript,
+      analyzedAt: a.analyzedAt,
       checklistReport: a.checklistReport,
       objectionsReport: a.objectionsReport,
     }));

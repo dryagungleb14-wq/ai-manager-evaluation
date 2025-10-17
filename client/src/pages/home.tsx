@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Phone, MessageCircle, Sparkles } from "lucide-react";
+import { Phone, MessageCircle, Sparkles, History } from "lucide-react";
+import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -92,7 +93,15 @@ export default function Home() {
             <Sparkles className="h-6 w-6 text-primary" />
             <h1 className="text-xl font-bold">AI Оценка Менеджеров</h1>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <Link href="/history">
+              <Button variant="outline" size="sm" className="gap-2" data-testid="button-view-history">
+                <History className="h-4 w-4" />
+                История
+              </Button>
+            </Link>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
