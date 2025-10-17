@@ -105,7 +105,23 @@
 ### POST /api/analyze
 Анализ диалога по чек-листу
 - **Input**: { transcript, checklist, language?, source }
-- **Output**: { checklistReport, objectionsReport }
+- **Output**: { checklistReport, objectionsReport, id }
+
+### GET /api/analyses
+Получить список всех анализов
+- **Output**: Array<{ id, checklist_name, created_at, ... }>
+
+### GET /api/analyses/:id
+Получить конкретный анализ по ID
+- **Output**: AnalysisReport с полными данными
+
+### GET /api/analyses/:id/markdown
+Скачать отчёт в Markdown формате
+- **Output**: Файл .md с форматированным отчётом
+
+### GET /api/analyses/:id/pdf
+Скачать отчёт в PDF формате
+- **Output**: Файл .pdf с профессиональным форматированием
 
 ## Переменные окружения
 
@@ -148,16 +164,42 @@ npm run dev
 - Поддержка русского языка
 - Обработка edge cases (нет возражений, неполные данные)
 
+## Реализованные возможности (✅ Completed)
+
+1. **✅ PostgreSQL База данных**: Полная миграция с in-memory на PostgreSQL
+   - Drizzle ORM для управления схемой
+   - Таблицы: checklists, analyses
+   - DatabaseStorage с поддержкой всех CRUD операций
+   - Автоматическая инициализация с дефолтными чек-листами
+
+2. **✅ История анализов**: Сохранение и просмотр прошлых анализов
+   - Страница /history с полным списком анализов
+   - API endpoints: GET /api/analyses, GET /api/analyses/:id
+   - Правильная сериализация дат (ISO string)
+   - React Query для оптимистичных обновлений
+
+3. **✅ Экспорт в Markdown**: Скачивание отчётов в Markdown формате
+   - Сервис server/services/markdown-generator.ts
+   - Форматирование с таблицами, заголовками, цитатами
+   - Endpoint: GET /api/analyses/:id/markdown
+   - Кнопка скачивания в интерфейсе результатов
+
+4. **✅ Экспорт в PDF**: Скачивание отчётов в PDF формате
+   - PDFKit для генерации PDF (serverless-friendly)
+   - Сервис server/services/pdf-generator.ts
+   - Профессиональное форматирование с заголовками, таблицами
+   - Endpoint: GET /api/analyses/:id/pdf
+   - Кнопка скачивания в интерфейсе результатов
+   - E2E тестирование подтвердило работоспособность
+
 ## Следующие этапы (Post-MVP)
 
-1. **Экспорт отчётов**: PDF и Markdown форматы
-2. **База данных**: PostgreSQL для постоянного хранения
-3. **Мультиязычность**: Поддержка английского языка
-4. **Аналитика**: Статистика по менеджерам и периодам
-5. **Vercel deployment**: Оптимизация для serverless
-6. **Офлайн режим**: Локальные ASR/LLM модели
+1. **Мультиязычность**: Поддержка английского языка
+2. **Аналитика**: Статистика по менеджерам и периодам
+3. **Vercel deployment**: Оптимизация для serverless
+4. **Офлайн режим**: Локальные ASR/LLM модели
 
-## Дизайн-решения
+## Технические решения
 
 ### Почему Gemini вместо GPT?
 - Бесплатный tier с щедрыми лимитами
