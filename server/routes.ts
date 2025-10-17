@@ -8,9 +8,10 @@ import { transcribeAudio } from "./services/whisper";
 import { analyzeConversation } from "./services/gemini-analyzer";
 import { generateMarkdownReport } from "./services/markdown-generator";
 import { generatePDFReport } from "./services/pdf-generator";
+import { parseChecklistFile } from "./services/checklist-parser";
 import { checklistSchema, analyzeRequestSchema } from "@shared/schema";
 
-// Configure multer for file uploads
+// Configure multer for audio uploads
 const upload = multer({
   dest: "uploads/",
   limits: {
@@ -34,6 +35,24 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(new Error("Неподдерживаемый формат файла. Используйте MP3, WAV, M4A, OGG или FLAC"));
+    }
+  },
+});
+
+// Configure multer for checklist file uploads
+const uploadChecklist = multer({
+  storage: multer.memoryStorage(), // Use memory storage for easier file processing
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedExts = [".txt", ".md", ".csv", ".xlsx", ".xls"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    
+    if (allowedExts.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Неподдерживаемый формат файла. Используйте TXT, MD, CSV или XLSX"));
     }
   },
 });
@@ -219,6 +238,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Delete checklist error:", error);
       res.status(500).json({
         error: error instanceof Error ? error.message : "Ошибка удаления чек-листа",
+      });
+    }
+  });
+
+  // POST /api/checklists/upload - Загрузить и распарсить чек-лист из файла
+  app.post("/api/checklists/upload", uploadChecklist.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "Файл не загружен" });
+      }
+
+      // Parse checklist from file
+      const result = await parseChecklistFile(req.file);
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+
+      if (!result.checklist) {
+        return res.status(500).json({ error: "Не удалось создать чек-лист" });
+      }
+
+      // Save parsed checklist to database
+      const created = await storage.createChecklist(result.checklist);
+      
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("Upload checklist error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Ошибка загрузки чек-листа",
       });
     }
   });

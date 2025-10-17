@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Download, Upload, Copy } from "lucide-react";
+import { Download, Upload, Copy, FileUp } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -13,6 +13,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { ChecklistUpload } from "@/components/checklist-upload";
 import { Checklist, InsertChecklist } from "@shared/schema";
 
 interface ChecklistSelectorProps {
@@ -21,6 +30,7 @@ interface ChecklistSelectorProps {
 
 export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps) {
   const [activeId, setActiveId] = useState<string>("");
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const { toast } = useToast();
 
   // Fetch checklists from API
@@ -138,6 +148,24 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
     await createChecklistMutation.mutateAsync(duplicatePayload);
   };
 
+  const handleChecklistUploaded = (checklist: Checklist) => {
+    // Invalidate and refetch checklists
+    queryClient.invalidateQueries({ queryKey: ["/api/checklists"] });
+    
+    // Set as active
+    setActiveId(checklist.id);
+    localStorage.setItem("manager-eval-active-checklist", checklist.id);
+    onChecklistChange(checklist);
+    
+    // Close dialog
+    setUploadDialogOpen(false);
+    
+    toast({
+      title: "Чек-лист загружен",
+      description: `"${checklist.name}" успешно создан и активирован`,
+    });
+  };
+
   const activeChecklist = checklists.find((c) => c.id === activeId);
 
   return (
@@ -161,6 +189,29 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
           </Select>
 
           <div className="flex flex-wrap gap-2">
+            <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="default"
+                  size="sm"
+                  data-testid="button-upload-checklist"
+                >
+                  <FileUp className="h-4 w-4 mr-2" />
+                  Загрузить файл
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Загрузить чек-лист из файла</DialogTitle>
+                  <DialogDescription>
+                    Поддерживаются текстовые (TXT, MD) и табличные (CSV, Excel) форматы.
+                    AI автоматически поймёт структуру вашего чек-листа.
+                  </DialogDescription>
+                </DialogHeader>
+                <ChecklistUpload onChecklistCreated={handleChecklistUploaded} />
+              </DialogContent>
+            </Dialog>
+
             <Button
               variant="outline"
               size="sm"
@@ -189,7 +240,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
               data-testid="button-import-checklist"
             >
               <Upload className="h-4 w-4 mr-2" />
-              Импорт
+              Импорт JSON
             </Button>
           </div>
 

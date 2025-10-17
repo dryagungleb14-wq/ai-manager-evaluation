@@ -3,8 +3,6 @@ import Papa from 'papaparse';
 import { GoogleGenAI } from "@google/genai";
 import { Checklist, ChecklistItem } from "@shared/schema";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-
 interface ParseResult {
   success: boolean;
   checklist?: Checklist;
@@ -13,7 +11,17 @@ interface ParseResult {
 
 // AI-парсинг текстовых файлов (TXT, MD)
 async function parseTextWithAI(content: string, filename: string): Promise<ParseResult> {
+  // Check if API key is available
+  if (!process.env.GEMINI_API_KEY) {
+    return {
+      success: false,
+      error: "GEMINI_API_KEY не настроен. Для парсинга TXT/MD файлов требуется Gemini API. Используйте CSV или Excel формат, или настройте API ключ в Secrets."
+    };
+  }
+
   try {
+    // Lazy initialization of Gemini client
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const model = ai.getGenerativeModel({ 
       model: "gemini-2.0-flash-exp",
       generationConfig: {
