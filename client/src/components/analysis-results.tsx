@@ -6,11 +6,13 @@ import {
   AlertTriangle,
   TrendingUp,
   FileText,
+  Download,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 import {
   Accordion,
   AccordionContent,
@@ -20,11 +22,26 @@ import {
 import { AnalysisReport, ChecklistItemStatus } from "@shared/schema";
 
 interface AnalysisResultsProps {
-  report: AnalysisReport;
+  report: AnalysisReport & { id?: string };
 }
 
 export function AnalysisResults({ report }: AnalysisResultsProps) {
-  const { checklistReport, objectionsReport } = report;
+  const { checklistReport, objectionsReport, id: analysisId } = report;
+
+  const handleDownloadMarkdown = () => {
+    if (!analysisId) {
+      console.error("No analysis ID available for download");
+      return;
+    }
+    
+    const url = `/api/analyses/${analysisId}/markdown`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `analysis-${analysisId}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const getStatusIcon = (status: ChecklistItemStatus) => {
     switch (status) {
@@ -69,6 +86,22 @@ export function AnalysisResults({ report }: AnalysisResultsProps) {
 
   return (
     <div className="space-y-6" data-testid="analysis-results">
+      {/* Download Button */}
+      {analysisId && (
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={handleDownloadMarkdown}
+            data-testid="button-download-markdown"
+          >
+            <Download className="h-4 w-4" />
+            Скачать отчёт (Markdown)
+          </Button>
+        </div>
+      )}
+
       {/* Отчёт по чек-листу */}
       <Card className="shadow-lg" data-testid="card-checklist-report">
         <CardHeader className="space-y-4">

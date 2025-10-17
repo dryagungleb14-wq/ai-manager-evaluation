@@ -6,6 +6,7 @@ import fs from "fs";
 import { storage } from "./storage";
 import { transcribeAudio } from "./services/whisper";
 import { analyzeConversation } from "./services/gemini-analyzer";
+import { generateMarkdownReport } from "./services/markdown-generator";
 import { checklistSchema, analyzeRequestSchema } from "@shared/schema";
 
 // Configure multer for file uploads
@@ -246,6 +247,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Get analysis error:", error);
       res.status(500).json({
         error: error instanceof Error ? error.message : "Ошибка получения анализа",
+      });
+    }
+  });
+
+  // GET /api/analyses/:id/markdown - Скачать отчёт в Markdown
+  app.get("/api/analyses/:id/markdown", async (req, res) => {
+    try {
+      const analysis = await storage.getAnalysis(req.params.id);
+      if (!analysis) {
+        return res.status(404).json({ error: "Анализ не найден" });
+      }
+
+      const markdown = generateMarkdownReport(analysis);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const filename = `analysis-${req.params.id}-${timestamp}.md`;
+
+      res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(markdown);
+    } catch (error) {
+      console.error("Download markdown error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Ошибка скачивания отчёта",
       });
     }
   });
