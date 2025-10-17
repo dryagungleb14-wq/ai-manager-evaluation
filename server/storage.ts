@@ -1,37 +1,61 @@
-import { type User, type InsertUser } from "@shared/schema";
+import { Checklist, AnalysisReport } from "@shared/schema";
 import { randomUUID } from "crypto";
 
-// modify the interface with any CRUD methods
-// you might need
-
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  // Checklists
+  getChecklists(): Promise<Checklist[]>;
+  getChecklist(id: string): Promise<Checklist | undefined>;
+  createChecklist(checklist: Checklist): Promise<Checklist>;
+  updateChecklist(id: string, checklist: Checklist): Promise<Checklist | undefined>;
+  deleteChecklist(id: string): Promise<boolean>;
+  
+  // Analysis history (optional for MVP, stored in-memory temporarily)
+  saveAnalysis(analysis: AnalysisReport): Promise<string>;
+  getAnalysis(id: string): Promise<AnalysisReport | undefined>;
 }
 
 export class MemStorage implements IStorage {
-  private users: Map<string, User>;
+  private checklists: Map<string, Checklist>;
+  private analyses: Map<string, AnalysisReport>;
 
   constructor() {
-    this.users = new Map();
+    this.checklists = new Map();
+    this.analyses = new Map();
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getChecklists(): Promise<Checklist[]> {
+    return Array.from(this.checklists.values());
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async getChecklist(id: string): Promise<Checklist | undefined> {
+    return this.checklists.get(id);
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
+  async createChecklist(checklist: Checklist): Promise<Checklist> {
+    this.checklists.set(checklist.id, checklist);
+    return checklist;
+  }
+
+  async updateChecklist(id: string, checklist: Checklist): Promise<Checklist | undefined> {
+    if (!this.checklists.has(id)) {
+      return undefined;
+    }
+    this.checklists.set(id, checklist);
+    return checklist;
+  }
+
+  async deleteChecklist(id: string): Promise<boolean> {
+    return this.checklists.delete(id);
+  }
+
+  async saveAnalysis(analysis: AnalysisReport): Promise<string> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    this.analyses.set(id, analysis);
+    return id;
+  }
+
+  async getAnalysis(id: string): Promise<AnalysisReport | undefined> {
+    return this.analyses.get(id);
   }
 }
 
