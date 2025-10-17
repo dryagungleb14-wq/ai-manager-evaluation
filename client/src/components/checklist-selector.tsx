@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
-import { Plus, Download, Upload, Copy } from "lucide-react";
+import { Download, Upload, Copy } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import {
   Select,
   SelectContent,
@@ -10,43 +13,67 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Checklist } from "@shared/schema";
-import {
-  getStoredChecklists,
-  getActiveChecklistId,
-  setActiveChecklistId,
-  addChecklist,
-} from "@/lib/checklist-storage";
-import { ChecklistEditor } from "./checklist-editor";
+import { Checklist, InsertChecklist } from "@shared/schema";
 
 interface ChecklistSelectorProps {
   onChecklistChange: (checklist: Checklist) => void;
 }
 
 export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps) {
-  const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [activeId, setActiveId] = useState<string>("");
-  const [showEditor, setShowEditor] = useState(false);
-  const [editingChecklist, setEditingChecklist] = useState<Checklist | null>(null);
+  const { toast } = useToast();
+
+  // Fetch checklists from API
+  const { data: checklists = [], isLoading } = useQuery<Checklist[]>({
+    queryKey: ["/api/checklists"],
+  });
+
+  // Create checklist mutation
+  const createChecklistMutation = useMutation<Checklist, Error, InsertChecklist>({
+    mutationFn: (checklist: InsertChecklist) =>
+      apiRequest("/api/checklists", "POST", checklist),
+    onSuccess: (newChecklist) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/checklists"] });
+      
+      // Set the new checklist as active
+      setActiveId(newChecklist.id);
+      localStorage.setItem("manager-eval-active-checklist", newChecklist.id);
+      onChecklistChange(newChecklist);
+      
+      toast({
+        title: "Чек-лист создан",
+        description: "Чек-лист успешно сохранён в базе данных",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Ошибка",
+        description: error instanceof Error ? error.message : "Не удалось создать чек-лист",
+        variant: "destructive",
+      });
+    },
+  });
 
   useEffect(() => {
-    const stored = getStoredChecklists();
-    setChecklists(stored);
-    
-    const active = getActiveChecklistId();
-    if (active && stored.find((c) => c.id === active)) {
+    if (checklists.length > 0 && !activeId) {
+      // Get stored active ID from localStorage as fallback
+      const storedActive = localStorage.getItem("manager-eval-active-checklist");
+      const active = storedActive && checklists.find((c) => c.id === storedActive)
+        ? storedActive
+        : checklists[0].id;
+      
       setActiveId(active);
-      onChecklistChange(stored.find((c) => c.id === active)!);
-    } else if (stored.length > 0) {
-      setActiveId(stored[0].id);
-      setActiveChecklistId(stored[0].id);
-      onChecklistChange(stored[0]);
+      localStorage.setItem("manager-eval-active-checklist", active);
+      const checklist = checklists.find((c) => c.id === active);
+      if (checklist) {
+        onChecklistChange(checklist);
+      }
     }
-  }, [onChecklistChange]);
+  }, [checklists, activeId, onChecklistChange]);
 
   const handleSelectChange = (value: string) => {
     setActiveId(value);
-    setActiveChecklistId(value);
+    localStorage.setItem("manager-eval-active-checklist", value);
     const checklist = checklists.find((c) => c.id === value);
     if (checklist) {
       onChecklistChange(checklist);
@@ -79,43 +106,36 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
         const text = await file.text();
         const imported = JSON.parse(text) as Checklist;
         
-        // Generate new ID to avoid conflicts
-        imported.id = `imported-${Date.now()}`;
+        // Create payload without ID (server will generate it)
+        const { id, ...insertPayload } = imported;
         
-        addChecklist(imported);
-        const updated = getStoredChecklists();
-        setChecklists(updated);
-        setActiveId(imported.id);
-        setActiveChecklistId(imported.id);
-        onChecklistChange(imported);
+        // Mutation onSuccess will handle setting active checklist
+        await createChecklistMutation.mutateAsync(insertPayload as InsertChecklist);
       } catch (err) {
         console.error("Ошибка импорта:", err);
+        toast({
+          title: "Ошибка импорта",
+          description: "Не удалось импортировать чек-лист",
+          variant: "destructive",
+        });
       }
     };
     input.click();
   };
 
-  const handleDuplicate = () => {
+  const handleDuplicate = async () => {
     const checklist = checklists.find((c) => c.id === activeId);
     if (!checklist) return;
 
-    const duplicate: Checklist = {
-      ...checklist,
-      id: `${checklist.id}-copy-${Date.now()}`,
+    // Create payload without ID (server will generate it)
+    const { id, ...baseChecklist } = checklist;
+    const duplicatePayload: InsertChecklist = {
+      ...baseChecklist,
       name: `${checklist.name} (копия)`,
     };
-
-    addChecklist(duplicate);
-    const updated = getStoredChecklists();
-    setChecklists(updated);
-    setActiveId(duplicate.id);
-    setActiveChecklistId(duplicate.id);
-    onChecklistChange(duplicate);
-  };
-
-  const handleCreateNew = () => {
-    setEditingChecklist(null);
-    setShowEditor(true);
+    
+    // Mutation onSuccess will handle setting active checklist
+    await createChecklistMutation.mutateAsync(duplicatePayload);
   };
 
   const activeChecklist = checklists.find((c) => c.id === activeId);
@@ -127,9 +147,9 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
           <CardTitle className="text-lg font-medium">Чек-лист</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Select value={activeId} onValueChange={handleSelectChange}>
+          <Select value={activeId} onValueChange={handleSelectChange} disabled={isLoading}>
             <SelectTrigger data-testid="select-checklist">
-              <SelectValue placeholder="Выберите чек-лист" />
+              <SelectValue placeholder={isLoading ? "Загрузка..." : "Выберите чек-лист"} />
             </SelectTrigger>
             <SelectContent>
               {checklists.map((checklist) => (
@@ -144,17 +164,8 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
             <Button
               variant="outline"
               size="sm"
-              onClick={handleCreateNew}
-              data-testid="button-create-checklist"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Создать
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
               onClick={handleDuplicate}
-              disabled={!activeId}
+              disabled={!activeId || createChecklistMutation.isPending}
               data-testid="button-duplicate-checklist"
             >
               <Copy className="h-4 w-4 mr-2" />
@@ -174,6 +185,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
               variant="outline"
               size="sm"
               onClick={handleImport}
+              disabled={createChecklistMutation.isPending}
               data-testid="button-import-checklist"
             >
               <Upload className="h-4 w-4 mr-2" />
@@ -224,21 +236,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
         </CardContent>
       </Card>
 
-      {showEditor && (
-        <ChecklistEditor
-          checklist={editingChecklist}
-          onClose={() => setShowEditor(false)}
-          onSave={(checklist) => {
-            addChecklist(checklist);
-            const updated = getStoredChecklists();
-            setChecklists(updated);
-            setActiveId(checklist.id);
-            setActiveChecklistId(checklist.id);
-            onChecklistChange(checklist);
-            setShowEditor(false);
-          }}
-        />
-      )}
     </>
   );
 }
+

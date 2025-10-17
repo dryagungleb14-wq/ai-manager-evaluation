@@ -163,3 +163,16 @@ export class DatabaseStorage implements IStorage {
 }
 
 export const storage = new DatabaseStorage();
+
+// Seed function to initialize default checklists
+export async function seedDefaultChecklists(defaultChecklists: Checklist[]): Promise<void> {
+  const existing = await storage.getChecklists();
+  
+  if (existing.length === 0) {
+    console.log("Seeding database with default checklists...");
+    for (const checklist of defaultChecklists) {
+      await storage.createChecklist(checklist);
+    }
+    console.log(`Seeded ${defaultChecklists.length} default checklists`);
+  }
+}
