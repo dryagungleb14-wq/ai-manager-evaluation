@@ -116,7 +116,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         language
       );
 
-      res.json(result);
+      // Save analysis to database
+      const analysisId = await storage.saveAnalysis(
+        result,
+        checklist.id,
+        textToAnalyze
+      );
+
+      // Return result with analysis ID
+      res.json({
+        ...result,
+        id: analysisId,
+      });
     } catch (error) {
       console.error("Analysis error:", error);
       

@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { pgTable, serial, integer, text, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
 
 // Типы чек-листов
 export const checklistItemTypeSchema = z.enum(["mandatory", "recommended", "prohibited"]);
@@ -144,3 +146,42 @@ export const insertChecklistItemSchema = checklistItemSchema.omit({ id: true });
 
 export type InsertChecklist = z.infer<typeof insertChecklistSchema>;
 export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
+
+// Drizzle Tables for PostgreSQL
+export const checklists = pgTable("checklists", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  version: text("version").notNull().default("1.0"),
+  items: jsonb("items").$type<ChecklistItem[]>().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const analyses = pgTable("analyses", {
+  id: serial("id").primaryKey(),
+  checklistId: integer("checklist_id").references(() => checklists.id),
+  source: text("source", { enum: ["call", "correspondence"] }).notNull(),
+  language: text("language").notNull().default("ru"),
+  transcript: text("transcript").notNull(),
+  checklistReport: jsonb("checklist_report").$type<ChecklistReport>().notNull(),
+  objectionsReport: jsonb("objections_report").$type<ObjectionsReport>().notNull(),
+  analyzedAt: timestamp("analyzed_at").defaultNow().notNull(),
+});
+
+// Drizzle-Zod schemas for inserts
+export const insertChecklistDbSchema = createInsertSchema(checklists).omit({ 
+  id: true,
+  createdAt: true, 
+  updatedAt: true 
+});
+
+export const insertAnalysisDbSchema = createInsertSchema(analyses).omit({ 
+  id: true,
+  analyzedAt: true 
+});
+
+// Types from Drizzle tables
+export type DbChecklist = typeof checklists.$inferSelect;
+export type InsertDbChecklist = z.infer<typeof insertChecklistDbSchema>;
+export type DbAnalysis = typeof analyses.$inferSelect;
+export type InsertDbAnalysis = z.infer<typeof insertAnalysisDbSchema>;
