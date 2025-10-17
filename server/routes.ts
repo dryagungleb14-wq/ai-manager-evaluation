@@ -7,6 +7,7 @@ import { storage } from "./storage";
 import { transcribeAudio } from "./services/whisper";
 import { analyzeConversation } from "./services/gemini-analyzer";
 import { generateMarkdownReport } from "./services/markdown-generator";
+import { generatePDFReport } from "./services/pdf-generator";
 import { checklistSchema, analyzeRequestSchema } from "@shared/schema";
 
 // Configure multer for file uploads
@@ -270,6 +271,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Download markdown error:", error);
       res.status(500).json({
         error: error instanceof Error ? error.message : "Ошибка скачивания отчёта",
+      });
+    }
+  });
+
+  // GET /api/analyses/:id/pdf - Скачать отчёт в PDF
+  app.get("/api/analyses/:id/pdf", async (req, res) => {
+    try {
+      const analysis = await storage.getAnalysis(req.params.id);
+      if (!analysis) {
+        return res.status(404).json({ error: "Анализ не найден" });
+      }
+
+      const doc = generatePDFReport(analysis);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const filename = `analysis-${req.params.id}-${timestamp}.pdf`;
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+      // Pipe PDF document to response, then finalize
+      doc.pipe(res);
+      doc.end();
+    } catch (error) {
+      console.error("Download PDF error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Ошибка скачивания PDF",
       });
     }
   });

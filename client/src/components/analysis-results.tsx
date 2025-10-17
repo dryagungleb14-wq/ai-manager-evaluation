@@ -43,6 +43,21 @@ export function AnalysisResults({ report }: AnalysisResultsProps) {
     document.body.removeChild(link);
   };
 
+  const handleDownloadPDF = () => {
+    if (!analysisId) {
+      console.error("No analysis ID available for download");
+      return;
+    }
+    
+    const url = `/api/analyses/${analysisId}/pdf`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `analysis-${analysisId}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const getStatusIcon = (status: ChecklistItemStatus) => {
     switch (status) {
       case "passed":
@@ -86,9 +101,9 @@ export function AnalysisResults({ report }: AnalysisResultsProps) {
 
   return (
     <div className="space-y-6" data-testid="analysis-results">
-      {/* Download Button */}
+      {/* Download Buttons */}
       {analysisId && (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -97,7 +112,17 @@ export function AnalysisResults({ report }: AnalysisResultsProps) {
             data-testid="button-download-markdown"
           >
             <Download className="h-4 w-4" />
-            Скачать отчёт (Markdown)
+            Markdown
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={handleDownloadPDF}
+            data-testid="button-download-pdf"
+          >
+            <Download className="h-4 w-4" />
+            PDF
           </Button>
         </div>
       )}
