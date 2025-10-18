@@ -131,6 +131,7 @@ export const analyzeRequestSchema = z.object({
   transcript: z.string().or(transcriptSchema),
   checklist: checklistSchema,
   language: z.string().optional(),
+  managerId: z.string().optional(),
 });
 
 export const analyzeResponseSchema = analysisReportSchema;
@@ -148,6 +149,17 @@ export type InsertChecklist = z.infer<typeof insertChecklistSchema>;
 export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
 
 // Drizzle Tables for PostgreSQL
+export const managers = pgTable("managers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  teamLead: text("team_lead"),
+  department: text("department"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const checklists = pgTable("checklists", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -160,6 +172,7 @@ export const checklists = pgTable("checklists", {
 export const analyses = pgTable("analyses", {
   id: serial("id").primaryKey(),
   checklistId: integer("checklist_id").references(() => checklists.id),
+  managerId: integer("manager_id").references(() => managers.id),
   source: text("source", { enum: ["call", "correspondence"] }).notNull(),
   language: text("language").notNull().default("ru"),
   transcript: text("transcript").notNull(),
@@ -169,6 +182,12 @@ export const analyses = pgTable("analyses", {
 });
 
 // Drizzle-Zod schemas for inserts
+export const insertManagerDbSchema = createInsertSchema(managers).omit({ 
+  id: true,
+  createdAt: true, 
+  updatedAt: true 
+});
+
 export const insertChecklistDbSchema = createInsertSchema(checklists).omit({ 
   id: true,
   createdAt: true, 
@@ -181,6 +200,8 @@ export const insertAnalysisDbSchema = createInsertSchema(analyses).omit({
 });
 
 // Types from Drizzle tables
+export type Manager = typeof managers.$inferSelect;
+export type InsertManager = z.infer<typeof insertManagerDbSchema>;
 export type DbChecklist = typeof checklists.$inferSelect;
 export type InsertDbChecklist = z.infer<typeof insertChecklistDbSchema>;
 export type DbAnalysis = typeof analyses.$inferSelect;
