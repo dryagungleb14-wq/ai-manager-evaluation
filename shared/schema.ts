@@ -141,10 +141,26 @@ export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>;
 export type AnalyzeRequest = z.infer<typeof analyzeRequestSchema>;
 export type AnalyzeResponse = z.infer<typeof analyzeResponseSchema>;
 
+// Manager schema for API
+export const managerSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  phone: z.string().nullable(),
+  email: z.string().nullable(),
+  teamLead: z.string().nullable(),
+  department: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+export type Manager = z.infer<typeof managerSchema>;
+
 // Insert schemas для создания новых записей
+export const insertManagerSchema = managerSchema.omit({ id: true, createdAt: true, updatedAt: true });
 export const insertChecklistSchema = checklistSchema.omit({ id: true });
 export const insertChecklistItemSchema = checklistItemSchema.omit({ id: true });
 
+export type InsertManager = z.infer<typeof insertManagerSchema>;
 export type InsertChecklist = z.infer<typeof insertChecklistSchema>;
 export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
 
@@ -200,8 +216,8 @@ export const insertAnalysisDbSchema = createInsertSchema(analyses).omit({
 });
 
 // Types from Drizzle tables
-export type Manager = typeof managers.$inferSelect;
-export type InsertManager = z.infer<typeof insertManagerDbSchema>;
+export type DbManager = typeof managers.$inferSelect;
+export type InsertDbManager = z.infer<typeof insertManagerDbSchema>;
 export type DbChecklist = typeof checklists.$inferSelect;
 export type InsertDbChecklist = z.infer<typeof insertChecklistDbSchema>;
 export type DbAnalysis = typeof analyses.$inferSelect;
