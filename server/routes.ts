@@ -113,7 +113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate entire request body with Zod
       const validatedRequest = analyzeRequestSchema.parse(req.body);
       
-      const { transcript, checklist, language = "ru" } = validatedRequest;
+      const { transcript, checklist, language = "ru", managerId } = validatedRequest;
       const source = (req.body.source as "call" | "correspondence") || "call";
 
       // Extract text from transcript if it's an object
@@ -137,11 +137,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         language
       );
 
-      // Save analysis to database
+      // Save analysis to database with managerId
       const analysisId = await storage.saveAnalysis(
         result,
         checklist.id,
-        textToAnalyze
+        textToAnalyze,
+        managerId
       );
 
       // Return result with analysis ID
