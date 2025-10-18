@@ -60,7 +60,7 @@ export default function Managers() {
 
   const createMutation = useMutation<Manager, Error, InsertManager>({
     mutationFn: (manager: InsertManager) =>
-      apiRequest("/api/managers", "POST", manager),
+      apiRequest("POST", "/api/managers", manager),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/managers"] });
       setDialogOpen(false);
@@ -81,7 +81,7 @@ export default function Managers() {
 
   const updateMutation = useMutation<Manager, Error, { id: string; data: InsertManager }>({
     mutationFn: ({ id, data }) =>
-      apiRequest(`/api/managers/${id}`, "PUT", data),
+      apiRequest("PUT", `/api/managers/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/managers"] });
       setDialogOpen(false);
@@ -103,7 +103,7 @@ export default function Managers() {
 
   const deleteMutation = useMutation<void, Error, string>({
     mutationFn: (id: string) =>
-      apiRequest(`/api/managers/${id}`, "DELETE"),
+      apiRequest("DELETE", `/api/managers/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/managers"] });
       toast({
