@@ -9,7 +9,7 @@ import { analyzeConversation } from "./services/gemini-analyzer";
 import { generateMarkdownReport } from "./services/markdown-generator";
 import { generatePDFReport } from "./services/pdf-generator";
 import { parseChecklistFile } from "./services/checklist-parser";
-import { checklistSchema, analyzeRequestSchema } from "@shared/schema";
+import { checklistSchema, analyzeRequestSchema, insertManagerSchema } from "@shared/schema";
 
 // Configure multer for audio uploads
 const upload = multer({
@@ -268,6 +268,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Upload checklist error:", error);
       res.status(500).json({
         error: error instanceof Error ? error.message : "Ошибка загрузки чек-листа",
+      });
+    }
+  });
+
+  // GET /api/managers - Получить всех менеджеров
+  app.get("/api/managers", async (req, res) => {
+    try {
+      const managers = await storage.getManagers();
+      res.json(managers);
+    } catch (error) {
+      console.error("Get managers error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Ошибка получения менеджеров",
+      });
+    }
+  });
+
+  // GET /api/managers/:id - Получить менеджера по ID
+  app.get("/api/managers/:id", async (req, res) => {
+    try {
+      const manager = await storage.getManager(req.params.id);
+      if (!manager) {
+        return res.status(404).json({ error: "Менеджер не найден" });
+      }
+      res.json(manager);
+    } catch (error) {
+      console.error("Get manager error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Ошибка получения менеджера",
+      });
+    }
+  });
+
+  // POST /api/managers - Создать менеджера
+  app.post("/api/managers", async (req, res) => {
+    try {
+      const validatedManager = insertManagerSchema.parse(req.body);
+      const created = await storage.createManager(validatedManager);
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("Create manager error:", error);
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Ошибка создания менеджера",
+      });
+    }
+  });
+
+  // PUT /api/managers/:id - Обновить менеджера
+  app.put("/api/managers/:id", async (req, res) => {
+    try {
+      const validatedManager = insertManagerSchema.parse(req.body);
+      const updated = await storage.updateManager(req.params.id, validatedManager);
+      if (!updated) {
+        return res.status(404).json({ error: "Менеджер не найден" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Update manager error:", error);
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Ошибка обновления менеджера",
+      });
+    }
+  });
+
+  // DELETE /api/managers/:id - Удалить менеджера
+  app.delete("/api/managers/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteManager(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Менеджер не найден" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete manager error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Ошибка удаления менеджера",
       });
     }
   });
