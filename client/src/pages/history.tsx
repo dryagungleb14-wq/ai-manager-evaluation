@@ -177,15 +177,17 @@ export default function History() {
                           ? "возражение"
                           : "возражений"}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="gap-2"
-                        data-testid={`button-view-${analysis.id}`}
-                      >
-                        Посмотреть детали
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
+                      <Link href={`/history/${analysis.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-2"
+                          data-testid={`button-view-${analysis.id}`}
+                        >
+                          Посмотреть детали
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>

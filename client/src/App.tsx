@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/lib/theme-provider";
 import Home from "@/pages/home";
 import History from "@/pages/history";
+import AnalysisDetail from "@/pages/analysis-detail";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -13,6 +14,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/history" component={History} />
+      <Route path="/history/:id" component={AnalysisDetail} />
       <Route component={NotFound} />
     </Switch>
   );

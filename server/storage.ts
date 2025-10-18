@@ -1,7 +1,7 @@
 // Integration: blueprint:javascript_database
 import { Checklist, AnalysisReport, checklists, analyses } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   // Checklists
@@ -162,7 +162,8 @@ export class DatabaseStorage implements IStorage {
     const allAnalyses = await db
       .select()
       .from(analyses)
-      .orderBy(analyses.analyzedAt);
+      .orderBy(desc(analyses.analyzedAt))
+      .limit(10);
 
     return allAnalyses.map((a) => ({
       id: a.id.toString(),
