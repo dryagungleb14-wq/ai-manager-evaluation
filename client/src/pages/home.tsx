@@ -9,6 +9,7 @@ import { AudioUpload } from "@/components/audio-upload";
 import { TextInput } from "@/components/text-input";
 import { TranscriptEditor } from "@/components/transcript-editor";
 import { ChecklistSelector } from "@/components/checklist-selector";
+import { ManagerSelector } from "@/components/manager-selector";
 import { AnalysisResults } from "@/components/analysis-results";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Checklist, AnalysisReport } from "@shared/schema";
@@ -20,6 +21,7 @@ export default function Home() {
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeChecklist, setActiveChecklist] = useState<Checklist | null>(null);
+  const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);
   const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
   const { toast } = useToast();
 
@@ -61,6 +63,7 @@ export default function Home() {
           checklist: activeChecklist,
           language: "ru",
           source: activeTab,
+          managerId: selectedManagerId,
         }),
       });
 
@@ -176,6 +179,10 @@ export default function Home() {
 
           {/* Sidebar */}
           <aside className="space-y-6">
+            <ManagerSelector
+              onManagerChange={setSelectedManagerId}
+              selectedManagerId={selectedManagerId}
+            />
             <ChecklistSelector onChecklistChange={setActiveChecklist} />
           </aside>
         </div>
