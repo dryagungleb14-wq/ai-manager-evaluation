@@ -308,6 +308,32 @@ export class DatabaseStorage implements IStorage {
 
 export const storage = new DatabaseStorage();
 
+// Seed function to initialize default managers
+export async function seedDefaultManagers(): Promise<void> {
+  const existing = await storage.getManagers();
+  
+  if (existing.length === 0) {
+    console.log("Seeding database with default managers...");
+    
+    const defaultManagers = [
+      { name: "Алексей Смирнов", phone: "+7 (915) 123-45-67", email: "a.smirnov@company.ru", teamLead: "Иванов И.И.", department: "Продажи B2B" },
+      { name: "Мария Петрова", phone: "+7 (916) 234-56-78", email: "m.petrova@company.ru", teamLead: "Иванов И.И.", department: "Продажи B2B" },
+      { name: "Дмитрий Ковалёв", phone: "+7 (917) 345-67-89", email: "d.kovalev@company.ru", teamLead: "Иванов И.И.", department: "Продажи B2B" },
+      { name: "Елена Соколова", phone: "+7 (918) 456-78-90", email: "e.sokolova@company.ru", teamLead: "Сидоров С.С.", department: "Продажи B2C" },
+      { name: "Иван Новиков", phone: "+7 (919) 567-89-01", email: "i.novikov@company.ru", teamLead: "Сидоров С.С.", department: "Продажи B2C" },
+      { name: "Ольга Морозова", phone: "+7 (920) 678-90-12", email: "o.morozova@company.ru", teamLead: "Сидоров С.С.", department: "Продажи B2C" },
+      { name: "Сергей Волков", phone: "+7 (921) 789-01-23", email: "s.volkov@company.ru", teamLead: "Кузнецов К.К.", department: "Поддержка" },
+      { name: "Анна Федорова", phone: "+7 (922) 890-12-34", email: "a.fedorova@company.ru", teamLead: "Кузнецов К.К.", department: "Поддержка" },
+    ];
+    
+    for (const manager of defaultManagers) {
+      await storage.createManager(manager);
+    }
+    
+    console.log(`Seeded ${defaultManagers.length} default managers`);
+  }
+}
+
 // Seed function to initialize default checklists
 export async function seedDefaultChecklists(defaultChecklists: Checklist[]): Promise<void> {
   const existing = await storage.getChecklists();
