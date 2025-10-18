@@ -189,9 +189,9 @@ npm run dev
 
 1. **✅ PostgreSQL База данных**: Полная миграция с in-memory на PostgreSQL
    - Drizzle ORM для управления схемой
-   - Таблицы: checklists, analyses
+   - Таблицы: checklists, analyses, managers
    - DatabaseStorage с поддержкой всех CRUD операций
-   - Автоматическая инициализация с дефолтными чек-листами
+   - Автоматическая инициализация с дефолтными чек-листами и менеджерами
 
 2. **✅ История анализов**: Сохранение и просмотр последних 10 анализов
    - Страница /history с последними 10 анализами (сортировка: новые первые)
@@ -216,6 +216,21 @@ npm run dev
    - Endpoint: GET /api/analyses/:id/pdf
    - Кнопка скачивания в интерфейсе результатов
    - E2E тестирование подтвердило работоспособность
+
+5. **✅ Атрибуция менеджеров (Manager Attribution MVP - Phase 1/4)**:
+   - Таблица managers: id, name, phone, email, teamLead, department, timestamps
+   - Связь analyses.managerId → managers.id (nullable FK)
+   - API endpoints: GET/POST/PUT/DELETE /api/managers
+   - Seed данные: 8 тестовых менеджеров (3 отдела: Продажи B2B, Продажи B2C, Поддержка)
+   - Frontend ManagerSelector: выбор менеджера перед анализом
+   - Страница /managers: CRUD управление менеджерами (таблица + форма)
+   - Навигация: кнопка "Менеджеры" в header главной страницы
+   - POST /api/analyze расширен для принятия managerId
+   
+   **Следующие фазы (Phase 2-4)**:
+   - Phase 2: Telphin API интеграция (автоматическая атрибуция по номеру телефона)
+   - Phase 3: Slack отчеты тимлидам
+   - Phase 4: Аналитика по менеджерам и командам
 
 ## Следующие этапы (Post-MVP)
 

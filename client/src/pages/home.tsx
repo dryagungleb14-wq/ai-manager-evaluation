@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Phone, MessageCircle, Sparkles, History } from "lucide-react";
+import { Phone, MessageCircle, Sparkles, History, Users } from "lucide-react";
 import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -102,6 +102,12 @@ export default function Home() {
             <h1 className="text-xl font-bold">AI Оценка Менеджеров</h1>
           </div>
           <div className="flex items-center gap-2">
+            <Link href="/managers">
+              <Button variant="outline" size="sm" className="gap-2" data-testid="button-view-managers">
+                <Users className="h-4 w-4" />
+                Менеджеры
+              </Button>
+            </Link>
             <Link href="/history">
               <Button variant="outline" size="sm" className="gap-2" data-testid="button-view-history">
                 <History className="h-4 w-4" />
