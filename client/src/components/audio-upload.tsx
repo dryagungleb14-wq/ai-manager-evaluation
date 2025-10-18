@@ -9,9 +9,10 @@ interface AudioUploadProps {
   onTranscript: (transcript: string) => void;
   isProcessing: boolean;
   setIsProcessing: (value: boolean) => void;
+  onUploadStart?: () => void;
 }
 
-export function AudioUpload({ onTranscript, isProcessing, setIsProcessing }: AudioUploadProps) {
+export function AudioUpload({ onTranscript, isProcessing, setIsProcessing, onUploadStart }: AudioUploadProps) {
   const [progress, setProgress] = useState(0);
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +21,7 @@ export function AudioUpload({ onTranscript, isProcessing, setIsProcessing }: Aud
     const file = acceptedFiles[0];
     if (!file) return;
 
+    onUploadStart?.();
     setFileName(file.name);
     setIsProcessing(true);
     setError(null);
@@ -64,7 +66,7 @@ export function AudioUpload({ onTranscript, isProcessing, setIsProcessing }: Aud
     } finally {
       setIsProcessing(false);
     }
-  }, [onTranscript, setIsProcessing]);
+  }, [onTranscript, setIsProcessing, onUploadStart]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
