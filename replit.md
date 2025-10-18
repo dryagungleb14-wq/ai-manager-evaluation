@@ -21,8 +21,10 @@
 - **PDFKit** для генерации PDF отчётов
 
 ### Хранение данных
-- In-memory storage для чек-листов и истории анализов (MVP)
-- LocalStorage в браузере для пользовательских чек-листов
+- **PostgreSQL** для чек-листов и истории анализов
+- **Drizzle ORM** для type-safe работы с БД
+- **Последние 10 анализов** хранятся с полными отчётами
+- **Аудиофайлы не сохраняются** - удаляются после транскрипции
 
 ## Основные возможности
 
@@ -86,6 +88,8 @@
 │   │   │   └── checklist-storage.ts
 │   │   ├── pages/           # Страницы
 │   │   │   ├── home.tsx
+│   │   │   ├── history.tsx
+│   │   │   ├── analysis-detail.tsx
 │   │   │   └── not-found.tsx
 │   │   └── App.tsx
 │   └── index.html
@@ -114,8 +118,10 @@
 - **Output**: { checklistReport, objectionsReport, id }
 
 ### GET /api/analyses
-Получить список всех анализов
-- **Output**: Array<{ id, checklist_name, created_at, ... }>
+Получить список последних 10 анализов (новые первые)
+- **Лимит**: 10 записей
+- **Сортировка**: DESC по дате анализа
+- **Output**: Array<{ id, source, language, transcript, analyzedAt, checklistReport, objectionsReport }>
 
 ### GET /api/analyses/:id
 Получить конкретный анализ по ID
@@ -187,11 +193,15 @@ npm run dev
    - DatabaseStorage с поддержкой всех CRUD операций
    - Автоматическая инициализация с дефолтными чек-листами
 
-2. **✅ История анализов**: Сохранение и просмотр прошлых анализов
-   - Страница /history с полным списком анализов
-   - API endpoints: GET /api/analyses, GET /api/analyses/:id
+2. **✅ История анализов**: Сохранение и просмотр последних 10 анализов
+   - Страница /history с последними 10 анализами (сортировка: новые первые)
+   - Детальный просмотр каждого анализа на /history/:id
+   - Навигация: Главная ↔ История ↔ Детальный просмотр
+   - API endpoints: GET /api/analyses (лимит 10, DESC), GET /api/analyses/:id
+   - Оптимизированная БД-запрос с `orderBy(desc())` и `limit(10)`
    - Правильная сериализация дат (ISO string)
    - React Query для оптимистичных обновлений
+   - **Аудиофайлы не хранятся** - только отчёты и транскрипты
 
 3. **✅ Экспорт в Markdown**: Скачивание отчётов в Markdown формате
    - Сервис server/services/markdown-generator.ts
