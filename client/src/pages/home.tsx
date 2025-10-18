@@ -23,6 +23,11 @@ export default function Home() {
   const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
   const { toast } = useToast();
 
+  // Сброс отчёта при загрузке нового контента
+  const handleResetAnalysis = () => {
+    setAnalysisReport(null);
+  };
+
   const handleAnalyze = async () => {
     if (!activeChecklist) {
       toast({
@@ -109,7 +114,10 @@ export default function Home() {
         <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
           {/* Main Content */}
           <div className="space-y-6">
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "call" | "correspondence")}>
+            <Tabs value={activeTab} onValueChange={(v) => {
+              setActiveTab(v as "call" | "correspondence");
+              handleResetAnalysis();
+            }}>
               <TabsList className="grid w-full max-w-md grid-cols-2" data-testid="tabs-mode">
                 <TabsTrigger value="call" className="gap-2" data-testid="tab-call">
                   <Phone className="h-4 w-4" />
@@ -126,6 +134,7 @@ export default function Home() {
                   onTranscript={setTranscript}
                   isProcessing={isProcessingAudio}
                   setIsProcessing={setIsProcessingAudio}
+                  onUploadStart={handleResetAnalysis}
                 />
                 
                 {transcript && (
