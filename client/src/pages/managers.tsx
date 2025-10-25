@@ -38,6 +38,25 @@ import { Manager, InsertManager, insertManagerSchema } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+function normalizeOptionalField(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeManagerPayload(payload: InsertManager): InsertManager {
+  return {
+    name: payload.name.trim(),
+    phone: normalizeOptionalField(payload.phone),
+    email: normalizeOptionalField(payload.email),
+    teamLead: normalizeOptionalField(payload.teamLead),
+    department: normalizeOptionalField(payload.department),
+  };
+}
+
 export default function Managers() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingManager, setEditingManager] = useState<Manager | null>(null);
@@ -51,16 +70,16 @@ export default function Managers() {
     resolver: zodResolver(insertManagerSchema),
     defaultValues: {
       name: "",
-      phone: "",
-      email: "",
-      teamLead: "",
-      department: "",
+      phone: null,
+      email: null,
+      teamLead: null,
+      department: null,
     },
   });
 
   const createMutation = useMutation<Manager, Error, InsertManager>({
     mutationFn: (manager: InsertManager) =>
-      apiRequest("POST", "/api/managers", manager),
+      apiRequest<Manager>("POST", "/api/managers", manager),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/managers"] });
       setDialogOpen(false);
@@ -79,9 +98,13 @@ export default function Managers() {
     },
   });
 
-  const updateMutation = useMutation<Manager, Error, { id: string; data: InsertManager }>({
+  const updateMutation = useMutation<
+    Manager,
+    Error,
+    { id: string; data: InsertManager }
+  >({
     mutationFn: ({ id, data }) =>
-      apiRequest("PUT", `/api/managers/${id}`, data),
+      apiRequest<Manager>("PUT", `/api/managers/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/managers"] });
       setDialogOpen(false);
@@ -102,8 +125,7 @@ export default function Managers() {
   });
 
   const deleteMutation = useMutation<void, Error, string>({
-    mutationFn: (id: string) =>
-      apiRequest("DELETE", `/api/managers/${id}`),
+    mutationFn: (id: string) => apiRequest<void>("DELETE", `/api/managers/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/managers"] });
       toast({
@@ -121,10 +143,12 @@ export default function Managers() {
   });
 
   const handleSubmit = (data: InsertManager) => {
+    const normalized = normalizeManagerPayload(data);
+
     if (editingManager) {
-      updateMutation.mutate({ id: editingManager.id, data });
+      updateMutation.mutate({ id: editingManager.id, data: normalized });
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(normalized);
     }
   };
 
@@ -132,10 +156,10 @@ export default function Managers() {
     setEditingManager(manager);
     form.reset({
       name: manager.name,
-      phone: manager.phone,
-      email: manager.email,
-      teamLead: manager.teamLead,
-      department: manager.department,
+      phone: manager.phone ?? null,
+      email: manager.email ?? null,
+      teamLead: manager.teamLead ?? null,
+      department: manager.department ?? null,
     });
     setDialogOpen(true);
   };
@@ -217,7 +241,15 @@ export default function Managers() {
                           <FormItem>
                             <FormLabel>Телефон</FormLabel>
                             <FormControl>
-                              <Input placeholder="+7 (999) 123-45-67" {...field} data-testid="input-manager-phone" />
+                              <Input
+                                placeholder="+7 (999) 123-45-67"
+                                value={field.value ?? ""}
+                                onChange={field.onChange}
+                                onBlur={field.onBlur}
+                                name={field.name}
+                                ref={field.ref}
+                                data-testid="input-manager-phone"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -230,7 +262,16 @@ export default function Managers() {
                           <FormItem>
                             <FormLabel>Email</FormLabel>
                             <FormControl>
-                              <Input type="email" placeholder="ivan@company.ru" {...field} data-testid="input-manager-email" />
+                              <Input
+                                type="email"
+                                placeholder="ivan@company.ru"
+                                value={field.value ?? ""}
+                                onChange={field.onChange}
+                                onBlur={field.onBlur}
+                                name={field.name}
+                                ref={field.ref}
+                                data-testid="input-manager-email"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -243,7 +284,15 @@ export default function Managers() {
                           <FormItem>
                             <FormLabel>Руководитель</FormLabel>
                             <FormControl>
-                              <Input placeholder="Петров П.П." {...field} data-testid="input-manager-teamlead" />
+                              <Input
+                                placeholder="Петров П.П."
+                                value={field.value ?? ""}
+                                onChange={field.onChange}
+                                onBlur={field.onBlur}
+                                name={field.name}
+                                ref={field.ref}
+                                data-testid="input-manager-teamlead"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -256,7 +305,15 @@ export default function Managers() {
                           <FormItem>
                             <FormLabel>Отдел</FormLabel>
                             <FormControl>
-                              <Input placeholder="Продажи B2B" {...field} data-testid="input-manager-department" />
+                              <Input
+                                placeholder="Продажи B2B"
+                                value={field.value ?? ""}
+                                onChange={field.onChange}
+                                onBlur={field.onBlur}
+                                name={field.name}
+                                ref={field.ref}
+                                data-testid="input-manager-department"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

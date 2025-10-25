@@ -22,12 +22,6 @@ async function parseTextWithAI(content: string, filename: string): Promise<Parse
   try {
     // Lazy initialization of Gemini client
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const model = ai.getGenerativeModel({ 
-      model: "gemini-2.0-flash-exp",
-      generationConfig: {
-        responseMimeType: "application/json",
-      }
-    });
 
     const prompt = `Ты эксперт по анализу чек-листов для оценки работы менеджеров.
 
@@ -64,8 +58,18 @@ ${content}
 
 Верни ТОЛЬКО валидный JSON без дополнительных комментариев.`;
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
+    const result = await ai.models.generateContent({
+      model: "gemini-2.0-flash-exp",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+      },
+    });
+
+    const responseText = result.text ?? "";
+    if (!responseText) {
+      throw new Error("Пустой ответ от Gemini API");
+    }
     
     const parsed = JSON.parse(responseText);
     
