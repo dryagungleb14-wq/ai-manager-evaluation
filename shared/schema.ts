@@ -131,7 +131,7 @@ export const analyzeRequestSchema = z.object({
   transcript: z.string().or(transcriptSchema),
   checklist: checklistSchema,
   language: z.string().optional(),
-  managerId: z.string().optional(),
+  managerId: z.string().nullable().optional(),
 });
 
 export const analyzeResponseSchema = analysisReportSchema;
