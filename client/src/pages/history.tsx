@@ -1,12 +1,22 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { History as HistoryIcon, Calendar, FileText, MessageSquare, ChevronRight } from "lucide-react";
+import {
+  History as HistoryIcon,
+  Calendar,
+  FileText,
+  MessageSquare,
+  ChevronRight,
+  Loader2,
+} from "lucide-react";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface AnalysisHistoryItem {
   id: string;
@@ -35,9 +45,38 @@ interface AnalysisHistoryItem {
 }
 
 export default function History() {
+  const { toast } = useToast();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const { data: analyses = [], isLoading } = useQuery<AnalysisHistoryItem[]>({
     queryKey: ["/api/analyses"],
   });
+
+  const deleteMutation = useMutation<void, Error, string>({
+    mutationFn: (id: string) => apiRequest<void>("DELETE", `/api/analyses/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/analyses"] });
+      toast({
+        title: "Готово",
+        description: "Анализ удалён",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDelete = (id: string) => {
+    if (confirm("Вы уверены, что хотите удалить этот анализ?")) {
+      setDeletingId(id);
+      deleteMutation.mutate(id, {
+        onSettled: () => setDeletingId(null),
+      });
+    }
+  };
 
   const getPassRate = (items: any[]) => {
     const passed = items.filter((item) => item.status === "passed").length;
@@ -177,17 +216,35 @@ export default function History() {
                           ? "возражение"
                           : "возражений"}
                       </div>
-                      <Link href={`/history/${analysis.id}`}>
+                      <div className="flex items-center gap-2">
+                        <Link href={`/history/${analysis.id}`}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="gap-2"
+                            data-testid={`button-view-${analysis.id}`}
+                          >
+                            Посмотреть детали
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </Link>
                         <Button
-                          variant="ghost"
+                          variant="destructive"
                           size="sm"
-                          className="gap-2"
-                          data-testid={`button-view-${analysis.id}`}
+                          onClick={() => handleDelete(analysis.id)}
+                          disabled={deleteMutation.isPending && deletingId === analysis.id}
+                          data-testid={`button-delete-${analysis.id}`}
                         >
-                          Посмотреть детали
-                          <ChevronRight className="h-4 w-4" />
+                          {deleteMutation.isPending && deletingId === analysis.id ? (
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Удаление...
+                            </span>
+                          ) : (
+                            "Удалить"
+                          )}
                         </Button>
-                      </Link>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

@@ -142,7 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         result,
         checklist.id,
         textToAnalyze,
-        managerId
+        managerId ?? undefined
       );
 
       // Return result with analysis ID
@@ -358,6 +358,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Get analyses error:", error);
       res.status(500).json({
         error: error instanceof Error ? error.message : "Ошибка получения анализов",
+      });
+    }
+  });
+
+  // DELETE /api/analyses/:id - Удалить анализ
+  app.delete("/api/analyses/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteAnalysis(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Анализ не найден" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete analysis error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Ошибка удаления анализа",
       });
     }
   });
