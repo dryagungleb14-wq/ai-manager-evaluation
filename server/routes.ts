@@ -443,6 +443,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/stats - Получить статистику по анализам
+  app.get("/api/stats", async (req, res) => {
+    try {
+      const analyses = await storage.getAllAnalyses();
+      
+      // Подсчитываем статистику
+      const totalAnalyses = analyses.length;
+      const callAnalyses = analyses.filter(a => a.source === 'call').length;
+      const correspondenceAnalyses = analyses.filter(a => a.source === 'correspondence').length;
+      
+      // Статистика по языкам
+      const languageStats = analyses.reduce((acc, analysis) => {
+        const lang = analysis.language || 'ru';
+        acc[lang] = (acc[lang] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      // Статистика по менеджерам
+      const managerStats = analyses.reduce((acc, analysis) => {
+        const managerId = analysis.managerId || 'unknown';
+        acc[managerId] = (acc[managerId] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      // Средние показатели по чек-листам
+      const avgScores = analyses.reduce((acc, analysis) => {
+        const checklistReport = analysis.checklistReport;
+        if (checklistReport && checklistReport.items) {
+          const totalScore = checklistReport.items.reduce((sum, item) => sum + item.score, 0);
+          const avgScore = totalScore / checklistReport.items.length;
+          acc.push(avgScore);
+        }
+        return acc;
+      }, [] as number[]);
+      
+      const overallAvgScore = avgScores.length > 0 
+        ? avgScores.reduce((sum, score) => sum + score, 0) / avgScores.length 
+        : 0;
+      
+      // Статистика по датам (последние 30 дней)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const recentAnalyses = analyses.filter(a => 
+        new Date(a.analyzedAt) >= thirtyDaysAgo
+      ).length;
+      
+      const stats = {
+        totalAnalyses,
+        callAnalyses,
+        correspondenceAnalyses,
+        languageStats,
+        managerStats,
+        overallAvgScore: Math.round(overallAvgScore * 100) / 100,
+        recentAnalyses,
+        lastUpdated: new Date().toISOString()
+      };
+      
+      res.json(stats);
+    } catch (error) {
+      console.error("Get stats error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Ошибка получения статистики",
+      });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
