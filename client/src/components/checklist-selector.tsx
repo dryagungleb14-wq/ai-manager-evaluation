@@ -41,7 +41,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
   // Create checklist mutation
   const createChecklistMutation = useMutation<Checklist, Error, InsertChecklist>({
     mutationFn: (checklist: InsertChecklist) =>
-      apiRequest("/api/checklists", "POST", checklist),
+      apiRequest<Checklist>("POST", "/api/checklists", checklist),
     onSuccess: (newChecklist) => {
       queryClient.invalidateQueries({ queryKey: ["/api/checklists"] });
       
