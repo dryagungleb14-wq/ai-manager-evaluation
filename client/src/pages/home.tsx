@@ -55,16 +55,18 @@ export default function Home() {
     setAnalysisReport(null);
 
     try {
+      const requestPayload = {
+        transcript: textToAnalyze,
+        checklist: activeChecklist,
+        language: "ru",
+        source: activeTab,
+        ...(selectedManagerId !== null ? { managerId: selectedManagerId } : {}),
+      };
+
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript: textToAnalyze,
-          checklist: activeChecklist,
-          language: "ru",
-          source: activeTab,
-          managerId: selectedManagerId,
-        }),
+        body: JSON.stringify(requestPayload),
       });
 
       if (!response.ok) {
