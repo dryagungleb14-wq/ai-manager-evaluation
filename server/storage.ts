@@ -37,6 +37,7 @@ export interface IStorage {
     checklistReport: any;
     objectionsReport: any;
   }>>;
+  deleteAnalysis(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -303,6 +304,18 @@ export class DatabaseStorage implements IStorage {
       checklistReport: a.checklistReport,
       objectionsReport: a.objectionsReport,
     }));
+  }
+
+  async deleteAnalysis(id: string): Promise<boolean> {
+    const numId = parseInt(id, 10);
+    if (isNaN(numId)) return false;
+
+    const result = await db
+      .delete(analyses)
+      .where(eq(analyses.id, numId))
+      .returning();
+
+    return result.length > 0;
   }
 }
 
