@@ -6,6 +6,7 @@ import { ArrowLeft, FileText, MessageSquare, Calendar } from "lucide-react";
 import { AnalysisResults } from "@/components/analysis-results";
 import { Card, CardContent } from "@/components/ui/card";
 import type { AnalysisReport } from "@shared/schema";
+import { buildApiUrl } from "@/lib/apiBase";
 
 interface AnalysisDetailResponse extends AnalysisReport {
   id: string;
@@ -31,7 +32,7 @@ export default function AnalysisDetail() {
   const { data: metadata } = useQuery<AnalysisMetadata>({
     queryKey: ["/api/analyses", analysisId, "metadata"],
     queryFn: async () => {
-      const res = await fetch(`/api/analyses/${analysisId}`);
+      const res = await fetch(buildApiUrl(`/api/analyses/${analysisId}`));
       if (!res.ok) throw new Error("Failed to fetch metadata");
       const data = await res.json();
       return {

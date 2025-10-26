@@ -13,6 +13,7 @@ import { ManagerSelector } from "@/components/manager-selector";
 import { AnalysisResults } from "@/components/analysis-results";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Checklist, AnalysisReport } from "@shared/schema";
+import { buildApiUrl } from "@/lib/apiBase";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"call" | "correspondence">("call");
@@ -63,7 +64,7 @@ export default function Home() {
         ...(selectedManagerId !== null ? { managerId: selectedManagerId } : {}),
       };
 
-      const response = await fetch("/api/analyze", {
+      const response = await fetch(buildApiUrl("/api/analyze"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestPayload),

@@ -4,6 +4,7 @@ import { Upload, Loader2, FileText, CheckCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checklist } from "@shared/schema";
+import { buildApiUrl } from "@/lib/apiBase";
 
 interface ChecklistUploadProps {
   onChecklistCreated: (checklist: Checklist) => void;
@@ -28,14 +29,14 @@ export function ChecklistUpload({ onChecklistCreated }: ChecklistUploadProps) {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("/api/checklists/upload", {
+      const response = await fetch(buildApiUrl("/api/checklists/upload"), {
         method: "POST",
         body: formData,
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ 
-          error: `Ошибка загрузки (${response.status})` 
+        const errorData = await response.json().catch(() => ({
+          error: `Ошибка загрузки (${response.status})`,
         }));
         throw new Error(errorData.error || `Ошибка при обработке файла (${response.status})`);
       }

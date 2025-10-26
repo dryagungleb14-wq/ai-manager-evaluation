@@ -4,6 +4,7 @@ import { Upload, Loader2, FileAudio } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { buildApiUrl } from "@/lib/apiBase";
 
 interface AudioUploadProps {
   onTranscript: (transcript: string) => void;
@@ -33,7 +34,7 @@ export function AudioUpload({ onTranscript, isProcessing, setIsProcessing, onUpl
 
       setProgress(30);
 
-      const response = await fetch("/api/transcribe", {
+      const response = await fetch(buildApiUrl("/api/transcribe"), {
         method: "POST",
         body: formData,
       });
