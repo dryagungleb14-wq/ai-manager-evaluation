@@ -5,7 +5,7 @@ import {
   ChecklistItemStatus,
   ObjectionHandling,
 } from "../shared/schema.js";
-import { executeGeminiRequest, getGeminiClient, GeminiServiceError } from "./gemini-client.js";
+import { executeGeminiRequest, getGeminiClient, GeminiServiceError, type GeminiContentResponse } from "./gemini-client.js";
 
 // DON'T DELETE THIS COMMENT
 // Follow these instructions when using this blueprint:
@@ -95,7 +95,7 @@ ${JSON.stringify(checklistItems, null, 2)}
 }`;
 
   const client = getGeminiClient();
-  const response = await executeGeminiRequest(() =>
+  const response = await executeGeminiRequest<GeminiContentResponse>(() =>
     client.models.generateContent({
       model: "gemini-2.5-flash",
       config: {
@@ -138,7 +138,7 @@ ${JSON.stringify(checklistItems, null, 2)}
     })
   );
 
-  const rawJson = response.text;
+  const rawJson = response.text ?? "";
   if (!rawJson) {
     throw new GeminiServiceError("Gemini вернул пустой ответ", 502, "gemini_empty_response");
   }
@@ -227,7 +227,7 @@ ${transcript}
 }`;
 
   const client = getGeminiClient();
-  const response = await executeGeminiRequest(() =>
+  const response = await executeGeminiRequest<GeminiContentResponse>(() =>
     client.models.generateContent({
       model: "gemini-2.5-flash",
       config: {
@@ -261,7 +261,7 @@ ${transcript}
     })
   );
 
-  const rawJson = response.text;
+  const rawJson = response.text ?? "";
   if (!rawJson) {
     throw new GeminiServiceError(
       "Gemini вернул пустой ответ для анализа возражений",

@@ -4,6 +4,12 @@ This document describes how to build and run the backend located in [`server/`](
 
 ## Project layout
 
+## Deploy
+
+- Railway использует `nixpacks.toml` с публичным npm mirror (`https://registry.npmmirror.com`).
+- Локальная проверка сервера: `npm run build:server && npm start`.
+- Фронтенд собирается отдельно: `npm run build`.
+
 - **Root directory:** `server/`
 - **Entry point:** `index.ts`
 - **Build output:** `dist/index.js`
@@ -22,13 +28,13 @@ Create a `.env` file inside `server/` (Railway automatically injects variables a
 
 ## Railway deployment settings
 
-Configure the Railway service to deploy from the `server/` directory with the following commands:
+Railway автоматически использует `nixpacks.toml`, поэтому переопределять команды не требуется. Фазы выполняют:
 
-- **Install:** `npm ci`
-- **Build:** `npm run build`
-- **Start:** `npm run start`
+- **Install:** mirror-реестр + `npm ci --omit=dev --no-audit --no-fund`
+- **Build:** `npm run build:server`
+- **Start:** `npm start`
 
-These commands build the TypeScript sources into `dist/` and launch the compiled JavaScript with source maps enabled. Ensure that the root directory for the service is set to `server/` so that Railway uses the correct `package.json`.
+Убедитесь, что сервис привязан к корню репозитория, чтобы Nixpacks нашёл конфиг и собрал `dist/index.js`.
 
 ## Local verification before deploying
 

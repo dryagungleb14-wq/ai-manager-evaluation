@@ -1,8 +1,175 @@
-import { GoogleGenAI } from "@google/genai";
-
 const DEFAULT_TIMEOUT_MS = 30000;
 const MAX_ATTEMPTS = 3;
 const BACKOFF_BASE_MS = 500;
+const DEFAULT_API_BASE_URL = "https://generativelanguage.googleapis.com";
+const DEFAULT_API_VERSION = "v1beta";
+
+type GeminiRole = "user" | "model" | "system";
+
+type GeminiContentPart =
+  | { text: string }
+  | { inlineData: { data: string; mimeType: string } };
+
+type GeminiContent = {
+  role: GeminiRole;
+  parts: GeminiContentPart[];
+};
+
+interface GeminiContentRequestConfig {
+  systemInstruction?: string | GeminiContent;
+  responseMimeType?: string;
+  responseSchema?: unknown;
+}
+
+interface GeminiGenerateContentRequest {
+  model: string;
+  contents: string | GeminiContent[];
+  config?: GeminiContentRequestConfig;
+}
+
+interface GeminiApiErrorPayload {
+  error?: {
+    code?: number;
+    status?: string;
+    message?: string;
+  };
+}
+
+export interface GeminiContentResponse {
+  text?: string;
+  raw?: unknown;
+}
+
+class GeminiModelsClient {
+  constructor(private readonly apiKey: string) {}
+
+  private resolveBaseUrl(): string {
+    const baseUrl = process.env.GEMINI_API_BASE_URL?.trim() || DEFAULT_API_BASE_URL;
+    const version = process.env.GEMINI_API_VERSION?.trim() || DEFAULT_API_VERSION;
+    return `${baseUrl.replace(/\/$/, "")}/${version}`;
+  }
+
+  private buildUrl(model: string): string {
+    const encodedModel = encodeURIComponent(model);
+    return `${this.resolveBaseUrl()}/models/${encodedModel}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
+  }
+
+  private normalizeContents(contents: string | GeminiContent[]): GeminiContent[] {
+    if (Array.isArray(contents)) {
+      return contents;
+    }
+
+    return [
+      {
+        role: "user",
+        parts: [{ text: contents }],
+      },
+    ];
+  }
+
+  private normalizeSystemInstruction(
+    instruction: GeminiContentRequestConfig["systemInstruction"],
+  ): GeminiContent | undefined {
+    if (!instruction) {
+      return undefined;
+    }
+
+    if (typeof instruction === "string") {
+      return {
+        role: "system",
+        parts: [{ text: instruction }],
+      };
+    }
+
+    return instruction;
+  }
+
+  private buildGenerationConfig(config?: GeminiContentRequestConfig): Record<string, unknown> | undefined {
+    if (!config) {
+      return undefined;
+    }
+
+    const generationConfig: Record<string, unknown> = {};
+
+    if (config.responseMimeType) {
+      generationConfig.response_mime_type = config.responseMimeType;
+    }
+
+    if (config.responseSchema) {
+      generationConfig.response_schema = config.responseSchema;
+    }
+
+    return Object.keys(generationConfig).length > 0 ? generationConfig : undefined;
+  }
+
+  private extractText(payload: any): string | undefined {
+    const candidates = Array.isArray(payload?.candidates) ? payload.candidates : [];
+
+    const parts = candidates
+      .flatMap((candidate: any) => candidate?.content?.parts ?? [])
+      .filter((part: any) => typeof part?.text === "string")
+      .map((part: any) => part.text as string);
+
+    if (parts.length === 0) {
+      return undefined;
+    }
+
+    return parts.join("\n");
+  }
+
+  async generateContent(request: GeminiGenerateContentRequest): Promise<GeminiContentResponse> {
+    const body: Record<string, unknown> = {
+      contents: this.normalizeContents(request.contents),
+    };
+
+    const systemInstruction = this.normalizeSystemInstruction(request.config?.systemInstruction);
+    if (systemInstruction) {
+      body.systemInstruction = systemInstruction;
+    }
+
+    const generationConfig = this.buildGenerationConfig(request.config);
+    if (generationConfig) {
+      body.generationConfig = generationConfig;
+    }
+
+    const response = await fetch(this.buildUrl(request.model), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      let errorPayload: GeminiApiErrorPayload | undefined;
+      try {
+        errorPayload = (await response.json()) as GeminiApiErrorPayload;
+      } catch {
+        errorPayload = undefined;
+      }
+
+      const statusCode = response.status || errorPayload?.error?.code || 502;
+      const statusText = errorPayload?.error?.status || response.statusText || "Unknown";
+      const message = errorPayload?.error?.message || `Gemini API request failed with status ${statusCode}`;
+
+      throw new GeminiServiceError(message, statusCode, statusText.toLowerCase());
+    }
+
+    const payload = await response.json();
+    return {
+      text: this.extractText(payload),
+      raw: payload,
+    };
+  }
+}
+
+class GeminiClient {
+  public readonly models: GeminiModelsClient;
+
+  constructor(apiKey: string) {
+    this.models = new GeminiModelsClient(apiKey);
+  }
+}
 
 export class GeminiServiceError extends Error {
   public readonly statusCode: number;
@@ -16,9 +183,9 @@ export class GeminiServiceError extends Error {
   }
 }
 
-let cachedClient: GoogleGenAI | undefined;
+let cachedClient: GeminiClient | undefined;
 
-export function getGeminiClient(): GoogleGenAI {
+export function getGeminiClient(): GeminiClient {
   if (cachedClient) {
     return cachedClient;
   }
@@ -33,7 +200,7 @@ export function getGeminiClient(): GoogleGenAI {
     );
   }
 
-  cachedClient = new GoogleGenAI({ apiKey });
+  cachedClient = new GeminiClient(apiKey);
   return cachedClient;
 }
 
@@ -58,11 +225,8 @@ function normalizeGeminiError(error: unknown): NormalizedGeminiError {
     return { statusCode: error.statusCode, code: error.code, message: error.message };
   }
 
-  const fallbackMessage =
-    error instanceof Error ? error.message : typeof error === "string" ? error : "Неизвестная ошибка Gemini";
-
   if (!error || typeof error !== "object") {
-    return { message: fallbackMessage };
+    return { message: typeof error === "string" ? error : "Неизвестная ошибка Gemini" };
   }
 
   const candidate = error as Record<string, unknown>;
@@ -78,10 +242,16 @@ function normalizeGeminiError(error: unknown): NormalizedGeminiError {
       ? candidate.error
       : undefined;
 
+  const message = typeof candidate.message === "string"
+    ? candidate.message
+    : typeof candidate.error_description === "string"
+      ? candidate.error_description
+      : "Неизвестная ошибка Gemini";
+
   return {
     statusCode: Number.isFinite(statusCode) ? statusCode : undefined,
     code,
-    message: fallbackMessage,
+    message,
   };
 }
 
