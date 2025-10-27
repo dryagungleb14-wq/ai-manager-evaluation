@@ -119,22 +119,22 @@ ${JSON.stringify(checklistItems, null, 2)}
                       properties: {
                         text: { type: "string" },
                         start: { type: "number" },
-                        end: { type: "number" },
+                        end: { type: "number" }
                       },
-                      required: ["text"],
-                    },
+                      required: ["text"]
+                    }
                   },
-                  comment: { type: "string" },
+                  comment: { type: "string" }
                 },
-                required: ["id", "status", "score", "evidence"],
-              },
+                required: ["id", "status", "score", "evidence"]
+              }
             },
-            summary: { type: "string" },
+            summary: { type: "string" }
           },
-          required: ["items", "summary"],
-        },
+          required: ["items", "summary"]
+        }
       },
-      contents,
+      contents
     })
   );
 
@@ -170,7 +170,7 @@ ${JSON.stringify(checklistItems, null, 2)}
       status: (analyzed?.status || "uncertain") as ChecklistItemStatus,
       score: typeof analyzed?.score === "number" ? analyzed.score : 0,
       evidence: Array.isArray(analyzed?.evidence) ? analyzed.evidence : [],
-      comment: analyzed?.comment,
+      comment: analyzed?.comment
     };
   });
 
@@ -180,10 +180,10 @@ ${JSON.stringify(checklistItems, null, 2)}
       language,
       analyzed_at: new Date().toISOString(),
       duration: undefined,
-      volume: transcript.length,
+      volume: transcript.length
     },
     items: reportItems,
-    summary: analysisData.summary || "Анализ завершён",
+    summary: analysisData.summary || "Анализ завершён"
   };
 }
 
@@ -246,18 +246,18 @@ ${transcript}
                   client_phrase: { type: "string" },
                   manager_reply: { type: "string" },
                   handling: { type: "string" },
-                  advice: { type: "string" },
+                  advice: { type: "string" }
                 },
-                required: ["category", "client_phrase", "handling"],
-              },
+                required: ["category", "client_phrase", "handling"]
+              }
             },
             conversation_essence: { type: "string" },
-            outcome: { type: "string" },
+            outcome: { type: "string" }
           },
-          required: ["topics", "objections", "conversation_essence", "outcome"],
-        },
+          required: ["topics", "objections", "conversation_essence", "outcome"]
+        }
       },
-      contents,
+      contents
     })
   );
 
@@ -291,10 +291,10 @@ ${transcript}
           client_phrase: obj.client_phrase || "",
           manager_reply: obj.manager_reply || undefined,
           handling: (obj.handling || "unhandled") as ObjectionHandling,
-          advice: obj.advice || undefined,
+          advice: obj.advice || undefined
         }))
       : [],
     conversation_essence: data.conversation_essence || "Не удалось определить суть разговора",
-    outcome: data.outcome || "Итог не зафиксирован",
+    outcome: data.outcome || "Итог не зафиксирован"
   };
 }
