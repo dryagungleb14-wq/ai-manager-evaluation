@@ -23,6 +23,7 @@ Create a `.env` file inside `server/` (Railway automatically injects variables a
 | `PORT` | HTTP port used by Express. Railway injects `PORT` automatically, default is `3000` for local runs. |
 | `CORS_ORIGIN` | Comma-separated list of allowed origins. Use `*` to allow all or set to your deployed frontend URL (e.g. `https://<frontend-on-vercel>.vercel.app`). |
 | `DATABASE_URL` | PostgreSQL connection string. Railway sets this automatically when the Neon plugin is attached. Without it the API falls back to an in-memory store that is not suitable for production. |
+| `GEMINI_API_KEY` | API key from Google AI Studio used by the analyzer and transcription helpers. Required for smoke tests and production traffic. |
 
 > ℹ️  To keep builds working without direct npm registry access, lightweight drop-in replacements of `cors` and `dotenv` live in [`server/vendor/`](server/vendor/). They expose the same public API that the standard packages provide, so no additional configuration is required when deploying to Railway.
 
