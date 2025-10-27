@@ -1,10 +1,10 @@
-import { GoogleGenAI } from "@google/genai";
 import fs from "fs";
 import path from "path";
+import { getGeminiClient } from "../lib/gemini-client.js";
 
 // Using Gemini 2.5 Flash for audio transcription (FREE alternative to OpenAI Whisper)
 // Gemini supports: audio/mp3, audio/wav, audio/m4a, audio/flac, audio/ogg, etc.
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const geminiClient = getGeminiClient();
 
 export interface TranscriptionResult {
   text: string;
@@ -50,7 +50,7 @@ If multiple speakers are audible, indicate them as "Manager:" and "Client:" or "
       prompt = `Transcribe this audio in ${language} language. ${prompt}`;
     }
     // Call Gemini with audio
-    const response = await ai.models.generateContent({
+    const response = await geminiClient.generateContent({
       model: "gemini-2.5-flash",
       contents: [
         {
@@ -59,7 +59,7 @@ If multiple speakers are audible, indicate them as "Manager:" and "Client:" or "
             {
               inlineData: {
                 data: audioBytes.toString("base64"),
-                mimeType: mimeType,
+                mimeType,
               },
             },
             {
