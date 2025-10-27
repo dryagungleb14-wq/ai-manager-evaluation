@@ -83,7 +83,7 @@ async function analyzeChecklist(
     threshold: item.confidence_threshold,
   }));
 
-  const userPrompt = `Диалог для анализа:
+  const contents = `Диалог для анализа:
 """
 ${transcript}
 """
@@ -145,7 +145,7 @@ ${JSON.stringify(checklistItems, null, 2)}
           required: ["items", "summary"],
         },
       },
-      contents: userPrompt,
+      contents,
     })
   );
 
@@ -220,7 +220,7 @@ async function analyzeObjections(
 
 Отвечай ТОЛЬКО валидным JSON без дополнительного текста.`;
 
-  const userPrompt = `Диалог для анализа:
+  const contents = `Диалог для анализа:
 """
 ${transcript}
 """
@@ -275,7 +275,7 @@ ${transcript}
           required: ["topics", "objections", "conversation_essence", "outcome"],
         },
       },
-      contents: userPrompt,
+      contents,
     })
   );
 
