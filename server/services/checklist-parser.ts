@@ -24,7 +24,7 @@ type RawChecklist = {
 };
 
 function isUploadFile(x: unknown): x is UploadFile {
-  return !!x && typeof x === "object" && "buffer" in (x as any);
+  return !!x && typeof x === "object" && ("buffer" in (x as any));
 }
 
 function toStringInput(input: unknown): string | null {
@@ -62,7 +62,9 @@ function normalizeChecklist(raw: RawChecklist): Checklist {
     }
 
     const rawCriteria = rawItem.criteria ?? {};
-    const llmHint = typeof rawCriteria.llm_hint === "string" ? rawCriteria.llm_hint : "";
+    const llmHint = typeof rawCriteria.llm_hint === "string" && rawCriteria.llm_hint.trim().length > 0
+      ? rawCriteria.llm_hint
+      : "";
     const positivePatterns = Array.isArray(rawCriteria.positive_patterns)
       ? rawCriteria.positive_patterns.filter((entry): entry is string => typeof entry === "string")
       : undefined;
@@ -86,12 +88,12 @@ function normalizeChecklist(raw: RawChecklist): Checklist {
     };
   });
 
-  const id = typeof raw.id === "string" && raw.id.trim().length > 0 ? raw.id : "temporary-checklist";
+  const checklistId = typeof raw.id === "string" && raw.id.trim().length > 0 ? raw.id : "temporary-checklist";
   const nameCandidate = typeof raw.name === "string" && raw.name.trim().length > 0 ? raw.name : undefined;
   const titleCandidate = typeof raw.title === "string" && raw.title.trim().length > 0 ? raw.title : undefined;
 
   return {
-    id,
+    id: checklistId,
     name: nameCandidate ?? titleCandidate ?? "Checklist",
     version: typeof raw.version === "string" && raw.version.trim().length > 0 ? raw.version : "1.0",
     items,
