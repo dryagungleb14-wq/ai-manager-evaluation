@@ -16,6 +16,7 @@ Create a `.env` file inside `server/` (Railway automatically injects variables a
 | --- | --- |
 | `PORT` | HTTP port used by Express. Railway injects `PORT` automatically, default is `3000` for local runs. |
 | `CORS_ORIGIN` | Comma-separated list of allowed origins. Use `*` to allow all or set to your deployed frontend URL (e.g. `https://<frontend-on-vercel>.vercel.app`). |
+| `DATABASE_URL` | PostgreSQL connection string. Railway sets this automatically when the Neon plugin is attached. Without it the API falls back to an in-memory store that is not suitable for production. |
 
 > ℹ️  To keep builds working without direct npm registry access, lightweight drop-in replacements of `cors` and `dotenv` live in [`server/vendor/`](server/vendor/). They expose the same public API that the standard packages provide, so no additional configuration is required when deploying to Railway.
 
@@ -53,6 +54,8 @@ Expected response:
 
 Use `npm --prefix server run dev` for a hot-reload development server powered by `tsx`.
 
+> 💡  The local server runs against an in-memory datastore when `DATABASE_URL` is not defined. This is convenient for smoke tests, but the production deployment on Railway must expose a working PostgreSQL database via `DATABASE_URL` so that history and seed data persist between restarts.
+
 ## Automated production health verification
 
 The repository provides a helper script that checks the status of the deployed Railway instance. Run it from the project root:
@@ -72,5 +75,6 @@ Results are written to [`reports/railway-health.json`](reports/railway-health.js
 ## Troubleshooting
 
 - **Process crashes on Railway:** Check that the build step finishes successfully, the compiled files are present in `dist/`, and that all required environment variables are defined.
+- **Database connection errors:** Confirm that the `DATABASE_URL` value matches the PostgreSQL instance provisioned in Railway (e.g. the Neon integration) and that the database is reachable from the service.
 - **CORS errors:** Confirm `CORS_ORIGIN` contains the correct domain(s). Separate multiple origins with commas.
 - **Health check failures:** Review the generated report in `reports/railway-health.json` and inspect Railway logs for detailed error messages.
