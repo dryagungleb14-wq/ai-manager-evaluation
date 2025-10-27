@@ -82,7 +82,7 @@ function normalizeChecklist(raw: ChecklistLike): Checklist {
       confidence_threshold:
         typeof candidate.confidence_threshold === "number" && candidate.confidence_threshold >= 0
           ? candidate.confidence_threshold
-          : 0.5,
+          : 0.6,
     };
   });
 
