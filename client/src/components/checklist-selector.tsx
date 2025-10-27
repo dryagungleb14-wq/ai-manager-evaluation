@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { Download, Upload, Copy, FileUp } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -21,8 +21,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ChecklistUpload } from "@/components/checklist-upload";
 import { Checklist, InsertChecklist } from "@/lib/rest";
+
+const ChecklistUpload = lazy(() =>
+  import("@/components/checklist-upload").then((module) => ({
+    default: module.ChecklistUpload,
+  }))
+);
 
 interface ChecklistSelectorProps {
   onChecklistChange: (checklist: Checklist) => void;
@@ -208,7 +213,15 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
                     AI автоматически поймёт структуру вашего чек-листа.
                   </DialogDescription>
                 </DialogHeader>
-                <ChecklistUpload onChecklistCreated={handleChecklistUploaded} />
+                <Suspense
+                  fallback={
+                    <div className="py-8 text-center text-sm text-muted-foreground">
+                      Загрузка формы загрузки...
+                    </div>
+                  }
+                >
+                  <ChecklistUpload onChecklistCreated={handleChecklistUploaded} />
+                </Suspense>
               </DialogContent>
             </Dialog>
 

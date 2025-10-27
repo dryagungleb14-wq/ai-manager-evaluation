@@ -1,19 +1,49 @@
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import { Phone, MessageCircle, Sparkles, History, Users } from "lucide-react";
 import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { AudioUpload } from "@/components/audio-upload";
-import { TextInput } from "@/components/text-input";
-import { TranscriptEditor } from "@/components/transcript-editor";
-import { ChecklistSelector } from "@/components/checklist-selector";
-import { ManagerSelector } from "@/components/manager-selector";
-import { AnalysisResults } from "@/components/analysis-results";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Checklist, AnalysisReport } from "@/lib/rest";
 import { buildApiUrl } from "@/lib/apiBase";
+
+const AudioUpload = lazy(() =>
+  import("@/components/audio-upload").then((module) => ({
+    default: module.AudioUpload,
+  }))
+);
+
+const TextInput = lazy(() =>
+  import("@/components/text-input").then((module) => ({
+    default: module.TextInput,
+  }))
+);
+
+const TranscriptEditor = lazy(() =>
+  import("@/components/transcript-editor").then((module) => ({
+    default: module.TranscriptEditor,
+  }))
+);
+
+const ChecklistSelector = lazy(() =>
+  import("@/components/checklist-selector").then((module) => ({
+    default: module.ChecklistSelector,
+  }))
+);
+
+const ManagerSelector = lazy(() =>
+  import("@/components/manager-selector").then((module) => ({
+    default: module.ManagerSelector,
+  }))
+);
+
+const AnalysisResults = lazy(() =>
+  import("@/components/analysis-results").then((module) => ({
+    default: module.AnalysisResults,
+  }))
+);
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"call" | "correspondence">("call");
@@ -142,20 +172,44 @@ export default function Home() {
               </TabsList>
 
               <TabsContent value="call" className="space-y-6 mt-6">
-                <AudioUpload
-                  onTranscript={setTranscript}
-                  isProcessing={isProcessingAudio}
-                  setIsProcessing={setIsProcessingAudio}
-                  onUploadStart={handleResetAnalysis}
-                />
-                
+                <Suspense
+                  fallback={
+                    <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed text-muted-foreground">
+                      Загрузка загрузчика аудио...
+                    </div>
+                  }
+                >
+                  <AudioUpload
+                    onTranscript={setTranscript}
+                    isProcessing={isProcessingAudio}
+                    setIsProcessing={setIsProcessingAudio}
+                    onUploadStart={handleResetAnalysis}
+                  />
+                </Suspense>
+
                 {transcript && (
-                  <TranscriptEditor value={transcript} onChange={setTranscript} />
+                  <Suspense
+                    fallback={
+                      <Card className="p-6 text-center text-muted-foreground">
+                        Загрузка редактора транскрипта...
+                      </Card>
+                    }
+                  >
+                    <TranscriptEditor value={transcript} onChange={setTranscript} />
+                  </Suspense>
                 )}
               </TabsContent>
 
               <TabsContent value="correspondence" className="space-y-6 mt-6">
-                <TextInput value={correspondenceText} onChange={setCorrespondenceText} />
+                <Suspense
+                  fallback={
+                    <Card className="p-6 text-center text-muted-foreground">
+                      Загрузка текстовой формы...
+                    </Card>
+                  }
+                >
+                  <TextInput value={correspondenceText} onChange={setCorrespondenceText} />
+                </Suspense>
               </TabsContent>
             </Tabs>
 
@@ -183,16 +237,42 @@ export default function Home() {
               </Card>
             )}
 
-            {analysisReport && <AnalysisResults report={analysisReport} />}
+            {analysisReport && (
+              <Suspense
+                fallback={
+                  <Card className="p-6 text-center text-muted-foreground">
+                    Загрузка результатов анализа...
+                  </Card>
+                }
+              >
+                <AnalysisResults report={analysisReport} />
+              </Suspense>
+            )}
           </div>
 
           {/* Sidebar */}
           <aside className="space-y-6">
-            <ManagerSelector
-              onManagerChange={setSelectedManagerId}
-              selectedManagerId={selectedManagerId}
-            />
-            <ChecklistSelector onChecklistChange={setActiveChecklist} />
+            <Suspense
+              fallback={
+                <Card className="p-6 text-center text-muted-foreground">
+                  Загрузка списка менеджеров...
+                </Card>
+              }
+            >
+              <ManagerSelector
+                onManagerChange={setSelectedManagerId}
+                selectedManagerId={selectedManagerId}
+              />
+            </Suspense>
+            <Suspense
+              fallback={
+                <Card className="p-6 text-center text-muted-foreground">
+                  Загрузка чек-листов...
+                </Card>
+              }
+            >
+              <ChecklistSelector onChecklistChange={setActiveChecklist} />
+            </Suspense>
           </aside>
         </div>
       </div>

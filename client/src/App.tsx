@@ -1,14 +1,16 @@
+import { Suspense, lazy } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/lib/theme-provider";
-import Home from "@/pages/home";
-import History from "@/pages/history";
-import AnalysisDetail from "@/pages/analysis-detail";
-import Managers from "@/pages/managers";
-import NotFound from "@/pages/not-found";
+
+const Home = lazy(() => import("@/pages/home"));
+const History = lazy(() => import("@/pages/history"));
+const AnalysisDetail = lazy(() => import("@/pages/analysis-detail"));
+const Managers = lazy(() => import("@/pages/managers"));
+const NotFound = lazy(() => import("@/pages/not-found"));
 
 function Router() {
   return (
@@ -28,7 +30,15 @@ function App() {
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <Suspense
+            fallback={
+              <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
+                Загрузка интерфейса...
+              </div>
+            }
+          >
+            <Router />
+          </Suspense>
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>

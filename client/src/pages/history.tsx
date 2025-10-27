@@ -13,8 +13,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { Link } from "wouter";
-import { formatDistanceToNow } from "date-fns";
-import { ru } from "date-fns/locale";
+import formatDistanceToNow from "date-fns/formatDistanceToNow";
+import ru from "date-fns/locale/ru";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
