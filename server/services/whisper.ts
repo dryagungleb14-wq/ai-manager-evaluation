@@ -1,10 +1,9 @@
-import { GoogleGenAI } from "@google/genai";
 import fs from "fs";
 import path from "path";
+import { executeGeminiRequest, getGeminiClient, GeminiServiceError } from "./gemini-client.js";
 
 // Using Gemini 2.5 Flash for audio transcription (FREE alternative to OpenAI Whisper)
 // Gemini supports: audio/mp3, audio/wav, audio/m4a, audio/flac, audio/ogg, etc.
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 export interface TranscriptionResult {
   text: string;
@@ -50,32 +49,39 @@ If multiple speakers are audible, indicate them as "Manager:" and "Client:" or "
       prompt = `Transcribe this audio in ${language} language. ${prompt}`;
     }
     // Call Gemini with audio
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              inlineData: {
-                data: audioBytes.toString("base64"),
-                mimeType: mimeType,
+    const client = getGeminiClient();
+    const response = await executeGeminiRequest(() =>
+      client.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                inlineData: {
+                  data: audioBytes.toString("base64"),
+                  mimeType: mimeType,
+                },
               },
-            },
-            {
-              text: prompt,
-            },
-          ],
-        },
-      ],
-    });
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+      })
+    );
 
     // Extract text from Gemini response (same as in gemini-analyzer.ts)
     const transcriptionText = response.text;
 
     if (!transcriptionText || transcriptionText.trim().length === 0) {
-      console.error("Gemini response:", JSON.stringify(response, null, 2));
-      throw new Error("Gemini не вернул расшифровку. Проверьте формат аудио и API ключ.");
+      console.warn("Gemini transcription returned empty response");
+      throw new GeminiServiceError(
+        "Gemini не вернул расшифровку. Проверьте формат аудио и API ключ.",
+        502,
+        "gemini_empty_transcription",
+      );
     }
 
     const result: TranscriptionResult = {
@@ -89,9 +95,17 @@ If multiple speakers are audible, indicate them as "Manager:" and "Client:" or "
 
     return result;
   } catch (error) {
-    console.error("Gemini transcription error:", error);
-    throw new Error(
-      `Ошибка транскрипции аудио: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`
+    if (error instanceof GeminiServiceError) {
+      throw error;
+    }
+
+    const message = error instanceof Error ? error.message : "Неизвестная ошибка";
+    console.error("Gemini transcription error:", message);
+    throw new GeminiServiceError(
+      `Ошибка транскрипции аудио: ${message}`,
+      502,
+      "gemini_transcription_failed",
+      error instanceof Error ? { cause: error } : undefined,
     );
   }
 }

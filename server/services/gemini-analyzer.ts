@@ -1,4 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
 import {
   Checklist,
   ChecklistReport,
@@ -6,6 +5,7 @@ import {
   ChecklistItemStatus,
   ObjectionHandling,
 } from "../shared/schema.js";
+import { executeGeminiRequest, getGeminiClient, GeminiServiceError } from "./gemini-client.js";
 
 // DON'T DELETE THIS COMMENT
 // Follow these instructions when using this blueprint:
@@ -13,7 +13,6 @@ import {
 //   - do not change this unless explicitly requested by the user
 
 // This API key is from Gemini Developer API Key, not vertex AI API Key
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 interface AnalysisResult {
   checklistReport: ChecklistReport;
@@ -38,9 +37,17 @@ export async function analyzeConversation(
       objectionsReport: objectionsResult,
     };
   } catch (error) {
-    console.error("Gemini analysis error:", error);
-    throw new Error(
-      `Ошибка анализа диалога: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`
+    if (error instanceof GeminiServiceError) {
+      throw error;
+    }
+
+    const message = error instanceof Error ? error.message : "Неизвестная ошибка";
+    console.error("Gemini analysis error:", message);
+    throw new GeminiServiceError(
+      `Ошибка анализа диалога: ${message}`,
+      502,
+      "gemini_analysis_failed",
+      error instanceof Error ? { cause: error } : undefined,
     );
   }
 }
@@ -98,65 +105,73 @@ ${JSON.stringify(checklistItems, null, 2)}
   "summary": "Краткая общая сводка выполнения чек-листа (2-3 предложения)"
 }`;
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    config: {
-      systemInstruction: systemPrompt,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: "object",
-        properties: {
-          items: {
-            type: "array",
+  const client = getGeminiClient();
+  const response = await executeGeminiRequest(() =>
+    client.models.generateContent({
+      model: "gemini-2.5-flash",
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "object",
+          properties: {
             items: {
-              type: "object",
-              properties: {
-                id: { type: "string" },
-                status: { type: "string" },
-                score: { type: "number" },
-                evidence: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      text: { type: "string" },
-                      start: { type: "number" },
-                      end: { type: "number" },
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  status: { type: "string" },
+                  score: { type: "number" },
+                  evidence: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        text: { type: "string" },
+                        start: { type: "number" },
+                        end: { type: "number" },
+                      },
+                      required: ["text"],
                     },
-                    required: ["text"],
                   },
+                  comment: { type: "string" },
                 },
-                comment: { type: "string" },
+                required: ["id", "status", "score", "evidence"],
               },
-              required: ["id", "status", "score", "evidence"],
             },
+            summary: { type: "string" },
           },
-          summary: { type: "string" },
+          required: ["items", "summary"],
         },
-        required: ["items", "summary"],
       },
-    },
-    contents: userPrompt,
-  });
+      contents: userPrompt,
+    })
+  );
 
   const rawJson = response.text;
-  
+
   if (!rawJson) {
-    throw new Error("Gemini returned empty response");
+    throw new GeminiServiceError("Gemini вернул пустой ответ", 502, "gemini_empty_response");
   }
 
   let analysisData: any;
   try {
     analysisData = JSON.parse(rawJson);
   } catch (parseError) {
-    console.error("Failed to parse Gemini response:", rawJson);
-    throw new Error("Не удалось обработать ответ от AI. Попробуйте снова.");
+    console.error("Failed to parse Gemini response");
+    throw new GeminiServiceError(
+      "Не удалось обработать ответ от AI. Попробуйте снова.",
+      502,
+      "gemini_parse_error",
+      parseError instanceof Error ? { cause: parseError } : undefined,
+    );
   }
 
   // Validate response structure
   if (!analysisData.items || !Array.isArray(analysisData.items)) {
-    console.error("Invalid Gemini response structure:", analysisData);
-    throw new Error("AI вернул некорректный формат данных");
+    console.error("Invalid Gemini response structure");
+    throw new GeminiServiceError("AI вернул некорректный формат данных", 502, "gemini_invalid_schema");
   }
 
   // Build checklist report with fallbacks
@@ -226,53 +241,65 @@ ${transcript}
   "outcome": "Итог: что договорились, следующие шаги"
 }`;
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    config: {
-      systemInstruction: systemPrompt,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: "object",
-        properties: {
-          topics: {
-            type: "array",
-            items: { type: "string" },
-          },
-          objections: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                category: { type: "string" },
-                client_phrase: { type: "string" },
-                manager_reply: { type: "string" },
-                handling: { type: "string" },
-                advice: { type: "string" },
-              },
-              required: ["category", "client_phrase", "handling"],
+  const client = getGeminiClient();
+  const response = await executeGeminiRequest(() =>
+    client.models.generateContent({
+      model: "gemini-2.5-flash",
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "object",
+          properties: {
+            topics: {
+              type: "array",
+              items: { type: "string" },
             },
+            objections: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  category: { type: "string" },
+                  client_phrase: { type: "string" },
+                  manager_reply: { type: "string" },
+                  handling: { type: "string" },
+                  advice: { type: "string" },
+                },
+                required: ["category", "client_phrase", "handling"],
+              },
+            },
+            conversation_essence: { type: "string" },
+            outcome: { type: "string" },
           },
-          conversation_essence: { type: "string" },
-          outcome: { type: "string" },
+          required: ["topics", "objections", "conversation_essence", "outcome"],
         },
-        required: ["topics", "objections", "conversation_essence", "outcome"],
       },
-    },
-    contents: userPrompt,
-  });
+      contents: userPrompt,
+    })
+  );
 
   const rawJson = response.text;
-  
+
   if (!rawJson) {
-    throw new Error("Gemini returned empty response for objections analysis");
+    throw new GeminiServiceError(
+      "Gemini вернул пустой ответ для анализа возражений",
+      502,
+      "gemini_empty_objections_response",
+    );
   }
 
   let data: any;
   try {
     data = JSON.parse(rawJson);
   } catch (parseError) {
-    console.error("Failed to parse Gemini objections response:", rawJson);
-    throw new Error("Не удалось обработать ответ от AI при анализе возражений");
+    console.error("Failed to parse Gemini objections response");
+    throw new GeminiServiceError(
+      "Не удалось обработать ответ от AI при анализе возражений",
+      502,
+      "gemini_objections_parse_error",
+      parseError instanceof Error ? { cause: parseError } : undefined,
+    );
   }
 
   // Validate and provide fallbacks

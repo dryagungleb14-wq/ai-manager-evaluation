@@ -9,6 +9,7 @@ import { generateMarkdownReport } from "./services/markdown-generator.js";
 import { generatePDFReport } from "./services/pdf-generator.js";
 import { parseChecklistFile } from "./services/checklist-parser.js";
 import { checklistSchema, analyzeRequestSchema, insertManagerSchema } from "./shared/schema.js";
+import { GeminiServiceError } from "./services/gemini-client.js";
 
 // Configure multer for audio uploads
 const upload = multer({
@@ -99,9 +100,18 @@ export async function registerRoutes(app: Express): Promise<void> {
         }
       }
 
-      console.error("Transcription error:", error);
+      const message = error instanceof Error ? error.message : "Ошибка транскрипции";
+      console.error("Transcription error:", message);
+
+      if (error instanceof GeminiServiceError) {
+        return res.status(error.statusCode).json({
+          error: message,
+          code: error.code,
+        });
+      }
+
       res.status(500).json({
-        error: error instanceof Error ? error.message : "Ошибка транскрипции",
+        error: message,
       });
     }
   });
@@ -150,8 +160,9 @@ export async function registerRoutes(app: Express): Promise<void> {
         id: analysisId,
       });
     } catch (error) {
-      console.error("Analysis error:", error);
-      
+      const message = error instanceof Error ? error.message : "Ошибка анализа";
+      console.error("Analysis error:", message);
+
       // Return 400 for validation errors, 500 for others
       if (error instanceof Error && error.name === "ZodError") {
         return res.status(400).json({
@@ -159,9 +170,16 @@ export async function registerRoutes(app: Express): Promise<void> {
           details: error.message,
         });
       }
-      
+
+      if (error instanceof GeminiServiceError) {
+        return res.status(error.statusCode).json({
+          error: message,
+          code: error.code,
+        });
+      }
+
       res.status(500).json({
-        error: error instanceof Error ? error.message : "Ошибка анализа",
+        error: message,
       });
     }
   });
