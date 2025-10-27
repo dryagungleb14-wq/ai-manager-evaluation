@@ -24,9 +24,14 @@
 
 ## Локальная проверка
 ```bash
-cd .
+cd client
 npm ci
 npm run build
 npm run preview
 ```
 Предпросмотр Vite доступен по адресу http://localhost:4173.
+
+## Зависимости клиента
+- Все runtime-зависимости фронтенда описаны в `client/package.json` и устанавливаются командой `npm ci` в каталоге `client/`.
+- Важные пакеты для роутинга и стилей: `wouter`, `tailwindcss`, `tailwindcss-animate`, `postcss`, `autoprefixer`.
+- Конфигурационные файлы (`tailwind.config.ts`, `postcss.config.js`, `vite.config.ts`) находятся в каталоге `client/` и не используют импорты из корня.
