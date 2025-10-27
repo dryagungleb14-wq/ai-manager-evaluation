@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { getGeminiClient } from "../lib/gemini-client.js";
 import {
   Checklist,
   ChecklistReport,
@@ -13,7 +13,7 @@ import {
 //   - do not change this unless explicitly requested by the user
 
 // This API key is from Gemini Developer API Key, not vertex AI API Key
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const geminiClient = getGeminiClient();
 
 interface AnalysisResult {
   checklistReport: ChecklistReport;
@@ -98,43 +98,41 @@ ${JSON.stringify(checklistItems, null, 2)}
   "summary": "Краткая общая сводка выполнения чек-листа (2-3 предложения)"
 }`;
 
-  const response = await ai.models.generateContent({
+  const response = await geminiClient.generateContent({
     model: "gemini-2.5-flash",
-    config: {
-      systemInstruction: systemPrompt,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: "object",
-        properties: {
+    systemInstruction: systemPrompt,
+    responseMimeType: "application/json",
+    responseSchema: {
+      type: "object",
+      properties: {
+        items: {
+          type: "array",
           items: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                id: { type: "string" },
-                status: { type: "string" },
-                score: { type: "number" },
-                evidence: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      text: { type: "string" },
-                      start: { type: "number" },
-                      end: { type: "number" },
-                    },
-                    required: ["text"],
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              status: { type: "string" },
+              score: { type: "number" },
+              evidence: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    text: { type: "string" },
+                    start: { type: "number" },
+                    end: { type: "number" },
                   },
+                  required: ["text"],
                 },
-                comment: { type: "string" },
               },
-              required: ["id", "status", "score", "evidence"],
+              comment: { type: "string" },
             },
+            required: ["id", "status", "score", "evidence"],
           },
-          summary: { type: "string" },
         },
-        required: ["items", "summary"],
+        summary: { type: "string" },
       },
+      required: ["items", "summary"],
     },
     contents: userPrompt,
   });
@@ -226,37 +224,35 @@ ${transcript}
   "outcome": "Итог: что договорились, следующие шаги"
 }`;
 
-  const response = await ai.models.generateContent({
+  const response = await geminiClient.generateContent({
     model: "gemini-2.5-flash",
-    config: {
-      systemInstruction: systemPrompt,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: "object",
-        properties: {
-          topics: {
-            type: "array",
-            items: { type: "string" },
-          },
-          objections: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                category: { type: "string" },
-                client_phrase: { type: "string" },
-                manager_reply: { type: "string" },
-                handling: { type: "string" },
-                advice: { type: "string" },
-              },
-              required: ["category", "client_phrase", "handling"],
-            },
-          },
-          conversation_essence: { type: "string" },
-          outcome: { type: "string" },
+    systemInstruction: systemPrompt,
+    responseMimeType: "application/json",
+    responseSchema: {
+      type: "object",
+      properties: {
+        topics: {
+          type: "array",
+          items: { type: "string" },
         },
-        required: ["topics", "objections", "conversation_essence", "outcome"],
+        objections: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              category: { type: "string" },
+              client_phrase: { type: "string" },
+              manager_reply: { type: "string" },
+              handling: { type: "string" },
+              advice: { type: "string" },
+            },
+            required: ["category", "client_phrase", "handling"],
+          },
+        },
+        conversation_essence: { type: "string" },
+        outcome: { type: "string" },
       },
+      required: ["topics", "objections", "conversation_essence", "outcome"],
     },
     contents: userPrompt,
   });
