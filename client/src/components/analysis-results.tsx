@@ -19,7 +19,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { AnalysisReport, ChecklistItemStatus } from "@shared/schema";
+import { AnalysisReport, ChecklistItemStatus } from "@/lib/rest";
 
 interface AnalysisResultsProps {
   report: AnalysisReport & { id?: string };

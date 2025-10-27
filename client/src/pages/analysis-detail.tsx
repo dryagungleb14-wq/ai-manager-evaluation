@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, FileText, MessageSquare, Calendar } from "lucide-react";
 import { AnalysisResults } from "@/components/analysis-results";
 import { Card, CardContent } from "@/components/ui/card";
-import type { AnalysisReport } from "@shared/schema";
+import type { AnalysisReport } from "@/lib/rest";
 import { buildApiUrl } from "@/lib/apiBase";
 
 interface AnalysisDetailResponse extends AnalysisReport {

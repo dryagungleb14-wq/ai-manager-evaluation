@@ -1,4 +1,4 @@
-import { Checklist } from "@shared/schema";
+import { Checklist } from "@/lib/rest";
 
 export const defaultChecklists: Checklist[] = [
   {

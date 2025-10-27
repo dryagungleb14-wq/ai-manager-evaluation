@@ -12,7 +12,7 @@ import { ChecklistSelector } from "@/components/checklist-selector";
 import { ManagerSelector } from "@/components/manager-selector";
 import { AnalysisResults } from "@/components/analysis-results";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Checklist, AnalysisReport } from "@shared/schema";
+import { Checklist, AnalysisReport } from "@/lib/rest";
 import { buildApiUrl } from "@/lib/apiBase";
 
 export default function Home() {

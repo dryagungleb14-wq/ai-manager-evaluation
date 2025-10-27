@@ -17,7 +17,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checklist, ChecklistItem, ChecklistItemType } from "@shared/schema";
+import {
+  Checklist,
+  ChecklistItem,
+  ChecklistItemType,
+} from "@/lib/rest";
 
 interface ChecklistEditorProps {
   checklist: Checklist | null;
