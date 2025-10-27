@@ -6,11 +6,7 @@ export interface TranscriptionResult {
   text: string;
   language?: string;
   duration?: number;
-  segments?: Array<{
-    start: number;
-    end: number;
-    text: string;
-  }>;
+  segments?: Array<{ start: number; end: number; text: string }>;
 }
 
 function getMimeType(filePath: string): string {
@@ -22,14 +18,14 @@ function getMimeType(filePath: string): string {
     ".flac": "audio/flac",
     ".ogg": "audio/ogg",
     ".webm": "audio/webm",
-    ".opus": "audio/opus",
+    ".opus": "audio/opus"
   };
   return mimeTypes[ext] || "audio/mpeg";
 }
 
 export async function transcribeAudio(
   audioFilePath: string,
-  language?: string,
+  language?: string
 ): Promise<TranscriptionResult> {
   try {
     const audioBytes = fs.readFileSync(audioFilePath);
@@ -51,13 +47,13 @@ export async function transcribeAudio(
               {
                 inlineData: {
                   data: audioBytes.toString("base64"),
-                  mimeType,
-                },
+                  mimeType
+                }
               },
-              { text: prompt },
-            ],
-          },
-        ],
+              { text: prompt }
+            ]
+          }
+        ]
       })
     );
 
@@ -66,7 +62,7 @@ export async function transcribeAudio(
       throw new GeminiServiceError(
         "Gemini не вернул расшифровку. Проверьте формат аудио и API ключ.",
         502,
-        "gemini_empty_transcription",
+        "gemini_empty_transcription"
       );
     }
 
@@ -74,7 +70,7 @@ export async function transcribeAudio(
       text: transcriptionText.trim(),
       language: language || "ru",
       duration: undefined,
-      segments: undefined,
+      segments: undefined
     };
   } catch (error) {
     if (error instanceof GeminiServiceError) throw error;
@@ -83,7 +79,7 @@ export async function transcribeAudio(
       `Ошибка транскрипции аудио: ${message}`,
       502,
       "gemini_transcription_failed",
-      error instanceof Error ? { cause: error } : undefined,
+      error instanceof Error ? { cause: error } : undefined
     );
   }
 }

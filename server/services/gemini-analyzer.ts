@@ -9,9 +9,8 @@ import { executeGeminiRequest, getGeminiClient, GeminiServiceError } from "./gem
 
 // DON'T DELETE THIS COMMENT
 // Follow these instructions when using this blueprint:
-// - Note that the newest Gemini model series is "gemini-2.5-flash" or gemini-2.5-pro"
+// - Note that the newest Gemini model series is "gemini-2.5-flash" or "gemini-2.5-pro"
 //   - do not change this unless explicitly requested by the user
-
 // This API key is from Gemini Developer API Key, not vertex AI API Key
 
 interface AnalysisResult {
@@ -26,21 +25,11 @@ export async function analyzeConversation(
   language: string = "ru"
 ): Promise<AnalysisResult> {
   try {
-    // Step 1: Analyze checklist items
     const checklistResult = await analyzeChecklist(transcript, checklist, source, language);
-
-    // Step 2: Analyze objections and content
     const objectionsResult = await analyzeObjections(transcript, language);
-
-    return {
-      checklistReport: checklistResult,
-      objectionsReport: objectionsResult,
-    };
+    return { checklistReport: checklistResult, objectionsReport: objectionsResult };
   } catch (error) {
-    if (error instanceof GeminiServiceError) {
-      throw error;
-    }
-
+    if (error instanceof GeminiServiceError) throw error;
     const message = error instanceof Error ? error.message : "Неизвестная ошибка";
     console.error("Gemini analysis error:", message);
     throw new GeminiServiceError(
@@ -150,7 +139,6 @@ ${JSON.stringify(checklistItems, null, 2)}
   );
 
   const rawJson = response.text;
-
   if (!rawJson) {
     throw new GeminiServiceError("Gemini вернул пустой ответ", 502, "gemini_empty_response");
   }
@@ -168,16 +156,13 @@ ${JSON.stringify(checklistItems, null, 2)}
     );
   }
 
-  // Validate response structure
   if (!analysisData.items || !Array.isArray(analysisData.items)) {
     console.error("Invalid Gemini response structure");
     throw new GeminiServiceError("AI вернул некорректный формат данных", 502, "gemini_invalid_schema");
   }
 
-  // Build checklist report with fallbacks
   const reportItems = checklist.items.map((item) => {
     const analyzed = analysisData.items.find((a: any) => a.id === item.id);
-    
     return {
       id: item.id,
       title: item.title,
@@ -251,10 +236,7 @@ ${transcript}
         responseSchema: {
           type: "object",
           properties: {
-            topics: {
-              type: "array",
-              items: { type: "string" },
-            },
+            topics: { type: "array", items: { type: "string" } },
             objections: {
               type: "array",
               items: {
@@ -280,7 +262,6 @@ ${transcript}
   );
 
   const rawJson = response.text;
-
   if (!rawJson) {
     throw new GeminiServiceError(
       "Gemini вернул пустой ответ для анализа возражений",
@@ -302,10 +283,9 @@ ${transcript}
     );
   }
 
-  // Validate and provide fallbacks
   return {
     topics: Array.isArray(data.topics) ? data.topics : [],
-    objections: Array.isArray(data.objections) 
+    objections: Array.isArray(data.objections)
       ? data.objections.map((obj: any) => ({
           category: obj.category || "Прочее",
           client_phrase: obj.client_phrase || "",
