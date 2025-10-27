@@ -1,18 +1,25 @@
 // Integration: blueprint:javascript_database
-import * as schema from "@shared/schema";
+import * as schema from "./shared/schema.js";
 
 // Проверяем, используем ли мы локальную разработку
-const isLocalDev = process.env.NODE_ENV === 'development' && !process.env.DATABASE_URL;
+const isLocalDev = !process.env.DATABASE_URL;
 
-let db;
+export interface DatabaseClient {
+  select: (...args: unknown[]) => any;
+  insert: (...args: unknown[]) => any;
+  update: (...args: unknown[]) => any;
+  delete: (...args: unknown[]) => any;
+}
+
+let db: DatabaseClient;
 
 if (isLocalDev) {
   // Используем SQLite для локальной разработки
   const Database = (await import('better-sqlite3')).default;
   const { drizzle } = await import('drizzle-orm/better-sqlite3');
-  
+
   const sqlite = new Database('local.db');
-  db = drizzle(sqlite, { schema });
+  db = drizzle(sqlite, { schema }) as unknown as DatabaseClient;
   
   // Создаем таблицы если их нет
   sqlite.exec(`
@@ -65,7 +72,7 @@ if (isLocalDev) {
   }
 
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  db = drizzle({ client: pool, schema });
+  db = drizzle({ client: pool, schema }) as unknown as DatabaseClient;
 }
 
 export { db };

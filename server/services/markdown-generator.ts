@@ -1,4 +1,4 @@
-import { AnalysisReport, ChecklistReportItem, Objection } from "@shared/schema";
+import { AnalysisReport, ChecklistReportItem, Objection } from "../shared/schema.js";
 
 /**
  * Generate a Markdown document from analysis report

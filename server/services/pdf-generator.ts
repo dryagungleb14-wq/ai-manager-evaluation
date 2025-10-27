@@ -1,5 +1,5 @@
 import PDFDocument from "pdfkit";
-import { AnalysisReport, ChecklistReportItem } from "@shared/schema";
+import { AnalysisReport, ChecklistReportItem } from "../shared/schema.js";
 
 interface PDFOptions {
   title?: string;

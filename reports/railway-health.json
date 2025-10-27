@@ -1,0 +1,11 @@
+{
+  "timestamp": "2025-10-26T17:43:24.800Z",
+  "discoveredUrl": null,
+  "healthz": {
+    "status": "pending",
+    "message": "Pending: public URL not discoverable automatically"
+  },
+  "hints": [
+    "Public URL not detected automatically. Provide RAILWAY_PUBLIC_URL to enable the check."
+  ]
+}

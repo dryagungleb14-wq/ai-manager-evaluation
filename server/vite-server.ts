@@ -1,12 +1,11 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
-import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
-import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
+import type { InlineConfig } from "vite";
 
-const viteLogger = createLogger();
+type ViteModule = typeof import("vite");
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -19,6 +18,11 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+async function loadViteModule(): Promise<ViteModule> {
+  const module = await import("vite");
+  return module;
+}
+
 export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
@@ -26,8 +30,22 @@ export async function setupVite(app: Express, server: Server) {
     allowedHosts: true as const,
   };
 
+  const { createServer: createViteServer, createLogger } = await loadViteModule();
+  const viteLogger = createLogger();
+  const inlineConfig: InlineConfig = {
+    root: path.resolve(import.meta.dirname, "..", "client"),
+    appType: "custom",
+    resolve: {
+      alias: {
+        "@": path.resolve(import.meta.dirname, "..", "client", "src"),
+        shared: path.resolve(import.meta.dirname, "shared"),
+        "@assets": path.resolve(import.meta.dirname, "..", "attached_assets"),
+      },
+    },
+  };
+
   const vite = await createViteServer({
-    ...viteConfig,
+    ...inlineConfig,
     configFile: false,
     customLogger: {
       ...viteLogger,
@@ -37,7 +55,6 @@ export async function setupVite(app: Express, server: Server) {
       },
     },
     server: serverOptions,
-    appType: "custom",
   });
 
   app.use(vite.middlewares);
@@ -78,9 +95,11 @@ export function serveStatic(app: Express) {
   }
 
   if (!fs.existsSync(path.resolve(distPath, "index.html"))) {
-    throw new Error(
-      `Could not find the build directory with index.html. Checked ${legacyPublicDir} and ${buildRoot}. Make sure to build the client first`,
+    log(
+      `Static client build not found. Checked ${legacyPublicDir} and ${buildRoot}. API will run without serving the client bundle.`,
+      "express",
     );
+    return;
   }
 
   app.use(express.static(distPath));

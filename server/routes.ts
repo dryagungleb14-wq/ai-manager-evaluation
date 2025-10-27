@@ -1,15 +1,14 @@
 import type { Express } from "express";
-import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { storage } from "./storage";
-import { transcribeAudio } from "./services/whisper";
-import { analyzeConversation } from "./services/gemini-analyzer";
-import { generateMarkdownReport } from "./services/markdown-generator";
-import { generatePDFReport } from "./services/pdf-generator";
-import { parseChecklistFile } from "./services/checklist-parser";
-import { checklistSchema, analyzeRequestSchema, insertManagerSchema } from "@shared/schema";
+import { storage, type StoredAnalysis } from "./storage.js";
+import { transcribeAudio } from "./services/whisper.js";
+import { analyzeConversation } from "./services/gemini-analyzer.js";
+import { generateMarkdownReport } from "./services/markdown-generator.js";
+import { generatePDFReport } from "./services/pdf-generator.js";
+import { parseChecklistFile } from "./services/checklist-parser.js";
+import { checklistSchema, analyzeRequestSchema, insertManagerSchema } from "./shared/schema.js";
 
 // Configure multer for audio uploads
 const upload = multer({
@@ -57,7 +56,7 @@ const uploadChecklist = multer({
   },
 });
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express): Promise<void> {
   // POST /api/transcribe - Транскрибация аудио
   app.post("/api/transcribe", upload.single("file"), async (req, res) => {
     try {
@@ -447,47 +446,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/stats", async (req, res) => {
     try {
       const analyses = await storage.getAllAnalyses();
-      
+
       // Подсчитываем статистику
       const totalAnalyses = analyses.length;
-      const callAnalyses = analyses.filter(a => a.source === 'call').length;
-      const correspondenceAnalyses = analyses.filter(a => a.source === 'correspondence').length;
-      
+      const callAnalyses = analyses.filter((analysis: StoredAnalysis) => analysis.source === "call").length;
+      const correspondenceAnalyses = analyses.filter(
+        (analysis: StoredAnalysis) => analysis.source === "correspondence",
+      ).length;
+
       // Статистика по языкам
-      const languageStats = analyses.reduce((acc, analysis) => {
-        const lang = analysis.language || 'ru';
-        acc[lang] = (acc[lang] || 0) + 1;
+      const languageStats = analyses.reduce<Record<string, number>>((acc, analysis) => {
+        const lang = analysis.language || "ru";
+        acc[lang] = (acc[lang] ?? 0) + 1;
         return acc;
-      }, {} as Record<string, number>);
-      
+      }, {});
+
       // Статистика по менеджерам
-      const managerStats = analyses.reduce((acc, analysis) => {
-        const managerId = analysis.managerId || 'unknown';
-        acc[managerId] = (acc[managerId] || 0) + 1;
+      const managerStats = analyses.reduce<Record<string, number>>((acc, analysis) => {
+        const managerId = analysis.managerId || "unknown";
+        acc[managerId] = (acc[managerId] ?? 0) + 1;
         return acc;
-      }, {} as Record<string, number>);
-      
+      }, {});
+
       // Средние показатели по чек-листам
-      const avgScores = analyses.reduce((acc, analysis) => {
-        const checklistReport = analysis.checklistReport;
-        if (checklistReport && checklistReport.items) {
+      const avgScores = analyses.reduce<number[]>((acc, analysis) => {
+        const { checklistReport } = analysis;
+        if (checklistReport?.items?.length) {
           const totalScore = checklistReport.items.reduce((sum, item) => sum + item.score, 0);
           const avgScore = totalScore / checklistReport.items.length;
           acc.push(avgScore);
         }
         return acc;
-      }, [] as number[]);
-      
-      const overallAvgScore = avgScores.length > 0 
-        ? avgScores.reduce((sum, score) => sum + score, 0) / avgScores.length 
+      }, []);
+
+      const overallAvgScore = avgScores.length > 0
+        ? avgScores.reduce((sum, score) => sum + score, 0) / avgScores.length
         : 0;
       
       // Статистика по датам (последние 30 дней)
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
-      const recentAnalyses = analyses.filter(a => 
-        new Date(a.analyzedAt) >= thirtyDaysAgo
+      const recentAnalyses = analyses.filter((analysis) =>
+        new Date(analysis.analyzedAt) >= thirtyDaysAgo
       ).length;
       
       const stats = {
@@ -510,7 +511,4 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const httpServer = createServer(app);
-
-  return httpServer;
 }

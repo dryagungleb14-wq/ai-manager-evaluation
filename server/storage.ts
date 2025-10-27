@@ -1,7 +1,29 @@
 // Integration: blueprint:javascript_database
-import { Checklist, AnalysisReport, Manager, checklists, analyses, managers } from "@shared/schema";
-import { db } from "./db";
+import { Checklist, AnalysisReport, Manager, checklists, analyses, managers } from "./shared/schema.js";
 import { eq, desc } from "drizzle-orm";
+import type { DatabaseClient } from "./db.js";
+
+export type StoredAnalysis = {
+  id: string;
+  checklistId?: string;
+  managerId?: string;
+  source: "call" | "correspondence";
+  language: string;
+  transcript: string;
+  analyzedAt: Date;
+  checklistReport: AnalysisReport["checklistReport"];
+  objectionsReport: AnalysisReport["objectionsReport"];
+};
+
+let databaseClient: DatabaseClient | null = null;
+let databaseInitError: Error | null = null;
+
+try {
+  const module = await import("./db.js");
+  databaseClient = module.db;
+} catch (error) {
+  databaseInitError = error instanceof Error ? error : new Error(String(error));
+}
 
 export interface IStorage {
   // Managers
@@ -26,34 +48,35 @@ export interface IStorage {
     managerId?: string
   ): Promise<string>;
   getAnalysis(id: string): Promise<AnalysisReport | undefined>;
-  getAllAnalyses(): Promise<Array<{
-    id: string;
-    checklistId?: string;
-    managerId?: string;
-    source: string;
-    language: string;
-    transcript: string;
-    analyzedAt: Date;
-    checklistReport: any;
-    objectionsReport: any;
-  }>>;
+  getAllAnalyses(): Promise<StoredAnalysis[]>;
   deleteAnalysis(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
+  constructor(private readonly db: DatabaseClient) {}
+
   // Managers implementation
   async getManagers(): Promise<Manager[]> {
-    const dbManagers = await db.select().from(managers);
+    const dbManagers = await this.db.select().from(managers);
     
-    return dbManagers.map((m) => ({
-      id: m.id.toString(),
-      name: m.name,
-      phone: m.phone,
-      email: m.email,
-      teamLead: m.teamLead,
-      department: m.department,
-      createdAt: m.createdAt,
-      updatedAt: m.updatedAt,
+    return dbManagers.map((managerRow: {
+      id: number;
+      name: string;
+      phone: string | null;
+      email: string | null;
+      teamLead: string | null;
+      department: string | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }) => ({
+      id: managerRow.id.toString(),
+      name: managerRow.name,
+      phone: managerRow.phone,
+      email: managerRow.email,
+      teamLead: managerRow.teamLead,
+      department: managerRow.department,
+      createdAt: managerRow.createdAt,
+      updatedAt: managerRow.updatedAt,
     }));
   }
 
@@ -61,7 +84,7 @@ export class DatabaseStorage implements IStorage {
     const numId = parseInt(id, 10);
     if (isNaN(numId)) return undefined;
 
-    const [manager] = await db
+    const [manager] = await this.db
       .select()
       .from(managers)
       .where(eq(managers.id, numId));
@@ -81,7 +104,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createManager(manager: Omit<Manager, 'id' | 'createdAt' | 'updatedAt'>): Promise<Manager> {
-    const [created] = await db
+    const [created] = await this.db
       .insert(managers)
       .values({
         name: manager.name,
@@ -108,7 +131,7 @@ export class DatabaseStorage implements IStorage {
     const numId = parseInt(id, 10);
     if (isNaN(numId)) return undefined;
 
-    const [updated] = await db
+    const [updated] = await this.db
       .update(managers)
       .set({
         ...manager,
@@ -135,7 +158,7 @@ export class DatabaseStorage implements IStorage {
     const numId = parseInt(id, 10);
     if (isNaN(numId)) return false;
 
-    const result = await db
+    const result = await this.db
       .delete(managers)
       .where(eq(managers.id, numId))
       .returning();
@@ -145,13 +168,18 @@ export class DatabaseStorage implements IStorage {
 
   // Checklists implementation
   async getChecklists(): Promise<Checklist[]> {
-    const dbChecklists = await db.select().from(checklists);
+    const dbChecklists = await this.db.select().from(checklists);
     
-    return dbChecklists.map((c) => ({
-      id: c.id.toString(),
-      name: c.name,
-      version: c.version,
-      items: c.items,
+    return dbChecklists.map((checklistRow: {
+      id: number;
+      name: string;
+      version: string;
+      items: Checklist["items"];
+    }) => ({
+      id: checklistRow.id.toString(),
+      name: checklistRow.name,
+      version: checklistRow.version,
+      items: checklistRow.items,
     }));
   }
 
@@ -159,7 +187,7 @@ export class DatabaseStorage implements IStorage {
     const numId = parseInt(id, 10);
     if (isNaN(numId)) return undefined;
 
-    const [checklist] = await db
+    const [checklist] = await this.db
       .select()
       .from(checklists)
       .where(eq(checklists.id, numId));
@@ -175,7 +203,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createChecklist(checklist: Checklist): Promise<Checklist> {
-    const [created] = await db
+    const [created] = await this.db
       .insert(checklists)
       .values({
         name: checklist.name,
@@ -196,7 +224,7 @@ export class DatabaseStorage implements IStorage {
     const numId = parseInt(id, 10);
     if (isNaN(numId)) return undefined;
 
-    const [updated] = await db
+    const [updated] = await this.db
       .update(checklists)
       .set({
         name: checklist.name,
@@ -221,7 +249,7 @@ export class DatabaseStorage implements IStorage {
     const numId = parseInt(id, 10);
     if (isNaN(numId)) return false;
 
-    const result = await db
+    const result = await this.db
       .delete(checklists)
       .where(eq(checklists.id, numId))
       .returning();
@@ -253,7 +281,7 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    const [saved] = await db
+    const [saved] = await this.db
       .insert(analyses)
       .values({
         checklistId: numericChecklistId,
@@ -273,7 +301,7 @@ export class DatabaseStorage implements IStorage {
     const numId = parseInt(id, 10);
     if (isNaN(numId)) return undefined;
 
-    const [analysis] = await db
+    const [analysis] = await this.db
       .select()
       .from(analyses)
       .where(eq(analyses.id, numId));
@@ -286,23 +314,33 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getAllAnalyses() {
-    const allAnalyses = await db
+  async getAllAnalyses(): Promise<StoredAnalysis[]> {
+    const allAnalyses = await this.db
       .select()
       .from(analyses)
       .orderBy(desc(analyses.analyzedAt))
       .limit(10);
 
-    return allAnalyses.map((a) => ({
-      id: a.id.toString(),
-      checklistId: a.checklistId?.toString(),
-      managerId: a.managerId?.toString(),
-      source: a.source,
-      language: a.language,
-      transcript: a.transcript,
-      analyzedAt: a.analyzedAt,
-      checklistReport: a.checklistReport,
-      objectionsReport: a.objectionsReport,
+    return allAnalyses.map((analysis: {
+      id: number;
+      checklistId: number | null;
+      managerId: number | null;
+      source: "call" | "correspondence";
+      language: string;
+      transcript: string;
+      analyzedAt: Date;
+      checklistReport: AnalysisReport["checklistReport"];
+      objectionsReport: AnalysisReport["objectionsReport"];
+    }) => ({
+      id: analysis.id.toString(),
+      checklistId: analysis.checklistId?.toString(),
+      managerId: analysis.managerId?.toString(),
+      source: analysis.source,
+      language: analysis.language,
+      transcript: analysis.transcript,
+      analyzedAt: analysis.analyzedAt,
+      checklistReport: analysis.checklistReport,
+      objectionsReport: analysis.objectionsReport,
     }));
   }
 
@@ -310,7 +348,7 @@ export class DatabaseStorage implements IStorage {
     const numId = parseInt(id, 10);
     if (isNaN(numId)) return false;
 
-    const result = await db
+    const result = await this.db
       .delete(analyses)
       .where(eq(analyses.id, numId))
       .returning();
@@ -319,7 +357,148 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+class InMemoryStorage implements IStorage {
+  private managerCounter = 1;
+  private checklistCounter = 1;
+  private analysisCounter = 1;
+  private readonly managersStore = new Map<string, Manager>();
+  private readonly checklistsStore = new Map<string, Checklist>();
+  private readonly analysesStore = new Map<
+    string,
+    StoredAnalysis & { transcript: string; report: AnalysisReport }
+  >();
+
+  async getManagers(): Promise<Manager[]> {
+    return Array.from(this.managersStore.values()).map(manager => ({ ...manager }));
+  }
+
+  async getManager(id: string): Promise<Manager | undefined> {
+    const manager = this.managersStore.get(id);
+    return manager ? { ...manager } : undefined;
+  }
+
+  async createManager(manager: Omit<Manager, "id" | "createdAt" | "updatedAt">): Promise<Manager> {
+    const id = String(this.managerCounter++);
+    const now = new Date();
+    const stored: Manager = {
+      id,
+      name: manager.name,
+      phone: manager.phone ?? null,
+      email: manager.email ?? null,
+      teamLead: manager.teamLead ?? null,
+      department: manager.department ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.managersStore.set(id, stored);
+    return { ...stored };
+  }
+
+  async updateManager(
+    id: string,
+    manager: Partial<Omit<Manager, "id" | "createdAt" | "updatedAt">>,
+  ): Promise<Manager | undefined> {
+    const existing = this.managersStore.get(id);
+    if (!existing) {
+      return undefined;
+    }
+    const updated: Manager = {
+      ...existing,
+      ...manager,
+      updatedAt: new Date(),
+    };
+    this.managersStore.set(id, updated);
+    return { ...updated };
+  }
+
+  async deleteManager(id: string): Promise<boolean> {
+    return this.managersStore.delete(id);
+  }
+
+  async getChecklists(): Promise<Checklist[]> {
+    return Array.from(this.checklistsStore.values()).map(checklist => ({ ...checklist }));
+  }
+
+  async getChecklist(id: string): Promise<Checklist | undefined> {
+    const checklist = this.checklistsStore.get(id);
+    return checklist ? { ...checklist, items: checklist.items.map(item => ({ ...item })) } : undefined;
+  }
+
+  async createChecklist(checklist: Checklist): Promise<Checklist> {
+    const id = checklist.id ?? String(this.checklistCounter++);
+    const stored: Checklist = {
+      ...checklist,
+      id,
+      items: checklist.items.map(item => ({ ...item })),
+    };
+    this.checklistsStore.set(id, stored);
+    return { ...stored, items: stored.items.map(item => ({ ...item })) };
+  }
+
+  async updateChecklist(id: string, checklist: Checklist): Promise<Checklist | undefined> {
+    if (!this.checklistsStore.has(id)) {
+      return undefined;
+    }
+    const stored: Checklist = {
+      ...checklist,
+      id,
+      items: checklist.items.map(item => ({ ...item })),
+    };
+    this.checklistsStore.set(id, stored);
+    return { ...stored, items: stored.items.map(item => ({ ...item })) };
+  }
+
+  async deleteChecklist(id: string): Promise<boolean> {
+    return this.checklistsStore.delete(id);
+  }
+
+  async saveAnalysis(
+    analysis: AnalysisReport,
+    checklistId?: string,
+    transcript?: string,
+    managerId?: string,
+  ): Promise<string> {
+    const id = String(this.analysisCounter++);
+    const stored: StoredAnalysis & { transcript: string; report: AnalysisReport } = {
+      id,
+      checklistId,
+      managerId,
+      source: analysis.checklistReport.meta.source,
+      language: analysis.checklistReport.meta.language,
+      transcript: transcript ?? "",
+      analyzedAt: new Date(),
+      checklistReport: analysis.checklistReport,
+      objectionsReport: analysis.objectionsReport,
+      report: analysis,
+    };
+    this.analysesStore.set(id, stored);
+    return id;
+  }
+
+  async getAnalysis(id: string): Promise<AnalysisReport | undefined> {
+    const stored = this.analysesStore.get(id);
+    return stored ? stored.report : undefined;
+  }
+
+  async getAllAnalyses(): Promise<StoredAnalysis[]> {
+    return Array.from(this.analysesStore.values()).map(({ report, transcript, ...rest }) => ({
+      ...rest,
+      transcript,
+    }));
+  }
+
+  async deleteAnalysis(id: string): Promise<boolean> {
+    return this.analysesStore.delete(id);
+  }
+}
+
+const storageInstance: IStorage = databaseClient
+  ? new DatabaseStorage(databaseClient)
+  : new InMemoryStorage();
+
+export const storage = storageInstance;
+export const storageInitializationError = databaseInitError;
+export const storageUsesDatabase = databaseClient !== null;
 
 // Seed function to initialize default managers
 export async function seedDefaultManagers(): Promise<void> {
