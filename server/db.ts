@@ -1,7 +1,6 @@
 // Integration: blueprint:javascript_database
 import * as schema from "./shared/schema.js";
 
-// Проверяем, используем ли мы локальную разработку
 const isLocalDev = !process.env.DATABASE_URL;
 
 export interface DatabaseClient {
@@ -11,17 +10,13 @@ export interface DatabaseClient {
   delete: (...args: unknown[]) => any;
 }
 
-let db: DatabaseClient;
+async function createLocalDatabase(): Promise<DatabaseClient> {
+  const { default: Database } = await import("better-sqlite3");
+  const { drizzle } = await import("drizzle-orm/better-sqlite3");
 
-if (isLocalDev) {
-  // Используем SQLite для локальной разработки
-  const Database = (await import('better-sqlite3')).default;
-  const { drizzle } = await import('drizzle-orm/better-sqlite3');
+  const sqlite = new Database("local.db");
+  const client = drizzle(sqlite, { schema }) as unknown as DatabaseClient;
 
-  const sqlite = new Database('local.db');
-  db = drizzle(sqlite, { schema }) as unknown as DatabaseClient;
-  
-  // Создаем таблицы если их нет
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS managers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,22 +52,33 @@ if (isLocalDev) {
       FOREIGN KEY (manager_id) REFERENCES managers(id)
     );
   `);
-} else {
-  // Используем Neon для продакшена
-  const { Pool, neonConfig } = await import('@neondatabase/serverless');
-  const { drizzle } = await import('drizzle-orm/neon-serverless');
+
+  return client;
+}
+
+async function createRemoteDatabase(): Promise<DatabaseClient> {
+  const { Pool, neonConfig } = await import("@neondatabase/serverless");
+  const { drizzle } = await import("drizzle-orm/neon-serverless");
   const ws = await import("ws");
 
   neonConfig.webSocketConstructor = ws.default;
 
   if (!process.env.DATABASE_URL) {
-    throw new Error(
-      "DATABASE_URL must be set. Did you forget to provision a database?",
-    );
+    throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
   }
 
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  db = drizzle({ client: pool, schema }) as unknown as DatabaseClient;
+  return drizzle({ client: pool, schema }) as unknown as DatabaseClient;
 }
 
-export { db };
+const databasePromise: Promise<DatabaseClient> = (isLocalDev ? createLocalDatabase() : createRemoteDatabase())
+  .catch((error) => {
+    console.error("Failed to initialize database", error);
+    throw error;
+  });
+
+export const dbPromise = databasePromise;
+
+export function getDatabase(): Promise<DatabaseClient> {
+  return databasePromise;
+}
