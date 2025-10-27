@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Manager } from "@shared/schema";
+import { Manager } from "@/lib/rest";
 
 interface ManagerSelectorProps {
   onManagerChange: (managerId: string | null) => void;

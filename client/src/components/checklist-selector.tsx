@@ -22,7 +22,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ChecklistUpload } from "@/components/checklist-upload";
-import { Checklist, InsertChecklist } from "@shared/schema";
+import { Checklist, InsertChecklist } from "@/lib/rest";
 
 interface ChecklistSelectorProps {
   onChecklistChange: (checklist: Checklist) => void;

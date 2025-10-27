@@ -1,4 +1,4 @@
-import { Checklist } from "@shared/schema";
+import { Checklist } from "@/lib/rest";
 import { defaultChecklists } from "./default-checklists";
 
 const STORAGE_KEY = "manager-eval-checklists";

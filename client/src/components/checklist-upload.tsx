@@ -3,7 +3,7 @@ import { useDropzone } from "react-dropzone";
 import { Upload, Loader2, FileText, CheckCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Checklist } from "@shared/schema";
+import { Checklist } from "@/lib/rest";
 import { buildApiUrl } from "@/lib/apiBase";
 
 interface ChecklistUploadProps {
