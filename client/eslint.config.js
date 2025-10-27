@@ -6,6 +6,9 @@ const sharedSettings = {
     '@typescript-eslint/parser': ['.ts', '.tsx'],
   },
   'import/resolver': {
+    typescript: {
+      project: './tsconfig.json',
+    },
     node: {
       extensions: ['.js', '.jsx', '.ts', '.tsx'],
     },
@@ -39,14 +42,8 @@ export default [
     },
     settings: sharedSettings,
     rules: {
-      'import/no-extraneous-dependencies': [
-        'error',
-        {
-          devDependencies: false,
-          optionalDependencies: false,
-          peerDependencies: false,
-        },
-      ],
+      'import/no-extraneous-dependencies': ['error', { packageDir: ['.'] }],
+      'import/no-unresolved': 'error',
     },
   },
 ];
