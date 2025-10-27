@@ -1,9 +1,33 @@
 "use client"
 
 import * as React from "react"
-import * as RechartsPrimitive from "recharts"
+import type {
+  LegendProps,
+  NameType,
+  ResponsiveContainerProps,
+  TooltipProps,
+  ValueType,
+} from "recharts"
 
 import { cn } from "@/lib/utils"
+
+const LazyResponsiveContainer = React.lazy(() =>
+  import("recharts").then((module) => ({
+    default: module.ResponsiveContainer,
+  }))
+)
+
+const LazyTooltip = React.lazy(() =>
+  import("recharts").then((module) => ({
+    default: module.Tooltip,
+  }))
+)
+
+const LazyLegend = React.lazy(() =>
+  import("recharts").then((module) => ({
+    default: module.Legend,
+  }))
+)
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const
@@ -38,9 +62,7 @@ const ChartContainer = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> & {
     config: ChartConfig
-    children: React.ComponentProps<
-      typeof RechartsPrimitive.ResponsiveContainer
-    >["children"]
+    children: ResponsiveContainerProps["children"]
   }
 >(({ id, className, children, config, ...props }, ref) => {
   const uniqueId = React.useId()
@@ -58,9 +80,15 @@ const ChartContainer = React.forwardRef<
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
-        <RechartsPrimitive.ResponsiveContainer>
-          {children}
-        </RechartsPrimitive.ResponsiveContainer>
+        <React.Suspense
+          fallback={
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+              Загрузка графика...
+            </div>
+          }
+        >
+          <LazyResponsiveContainer>{children}</LazyResponsiveContainer>
+        </React.Suspense>
       </div>
     </ChartContext.Provider>
   )
@@ -100,11 +128,9 @@ ${colorConfig
   )
 }
 
-const ChartTooltip = RechartsPrimitive.Tooltip
-
 const ChartTooltipContent = React.forwardRef<
   HTMLDivElement,
-  React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
+  TooltipProps<ValueType, NameType> &
     React.ComponentProps<"div"> & {
       hideLabel?: boolean
       hideIndicator?: boolean
@@ -255,13 +281,10 @@ const ChartTooltipContent = React.forwardRef<
   }
 )
 ChartTooltipContent.displayName = "ChartTooltip"
-
-const ChartLegend = RechartsPrimitive.Legend
-
 const ChartLegendContent = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> &
-    Pick<RechartsPrimitive.LegendProps, "payload" | "verticalAlign"> & {
+    Pick<LegendProps, "payload" | "verticalAlign"> & {
       hideIcon?: boolean
       nameKey?: string
     }
@@ -315,6 +338,22 @@ const ChartLegendContent = React.forwardRef<
   }
 )
 ChartLegendContent.displayName = "ChartLegend"
+
+const ChartTooltip: React.FC<TooltipProps<ValueType, NameType>> = (
+  props
+) => (
+  <React.Suspense fallback={null}>
+    <LazyTooltip {...props} />
+  </React.Suspense>
+)
+ChartTooltip.displayName = "ChartTooltip"
+
+const ChartLegend: React.FC<LegendProps> = (props) => (
+  <React.Suspense fallback={null}>
+    <LazyLegend {...props} />
+  </React.Suspense>
+)
+ChartLegend.displayName = "ChartLegend"
 
 // Helper to extract item config from a payload.
 function getPayloadConfigFromPayload(
