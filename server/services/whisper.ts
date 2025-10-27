@@ -44,12 +44,7 @@ export async function transcribeAudio(
           {
             role: "user",
             parts: [
-              {
-                inlineData: {
-                  data: audioBytes.toString("base64"),
-                  mimeType
-                }
-              },
+              { inlineData: { data: audioBytes.toString("base64"), mimeType } },
               { text: prompt }
             ]
           }

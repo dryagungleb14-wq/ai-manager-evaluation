@@ -1,12 +1,9 @@
-// server/services/checklist-parser.ts
-import { randomUUID } from "node:crypto";
 import type { Request } from "express";
-import type { Checklist, ChecklistItem } from "../shared/schema.js";
+import type { Checklist } from "../shared/schema.js";
 
 type UploadFile = Express.Multer.File | { originalname?: string; buffer?: Buffer };
 
 function isUploadFile(x: unknown): x is UploadFile {
-  // достаточно признаков для Express upload
   return !!x && typeof x === "object" && ("buffer" in (x as any));
 }
 
@@ -25,40 +22,11 @@ function safeParseJSON<T = unknown>(raw: string): T {
   }
 }
 
-function normalizeChecklistItem(raw: any, index: number): ChecklistItem {
-  if (!raw || (!raw.id && !raw.title)) {
-    throw new Error("Checklist item must have id and title");
-  }
-
-  const id = raw.id ? String(raw.id) : `item-${index + 1}`;
-  const title = raw.title ? String(raw.title) : `Item ${index + 1}`;
-  const type = raw.type === "mandatory" || raw.type === "prohibited" ? raw.type : "recommended";
-  const criteria = raw.criteria ?? {};
-  const llmHint = typeof criteria.llm_hint === "string" ? criteria.llm_hint : title;
-
-  return {
-    id,
-    title,
-    type,
-    criteria: {
-      llm_hint: llmHint,
-      positive_patterns: Array.isArray(criteria.positive_patterns) ? criteria.positive_patterns : undefined,
-      negative_patterns: Array.isArray(criteria.negative_patterns) ? criteria.negative_patterns : undefined,
-    },
-    confidence_threshold:
-      typeof raw.confidence_threshold === "number" ? raw.confidence_threshold : 0.5,
-  } satisfies ChecklistItem;
-}
-
-/**
- * Универсальный парсер чек-листа.
- * Принимает строку/буфер/Express upload/объект и возвращает Checklist.
- */
+/** Универсальный парсер чек-листа. */
 export function parseChecklist(input: unknown): Checklist {
   if (input && typeof input === "object" && !isUploadFile(input)) {
     return input as Checklist;
   }
-
   const str = toStringInput(input);
   if (!str) throw new Error("Checklist input is empty");
 
@@ -66,24 +34,26 @@ export function parseChecklist(input: unknown): Checklist {
   if (!data || !Array.isArray(data.items)) {
     throw new Error("Checklist JSON must contain items[]");
   }
-
-  const name = data.name ?? data.title ?? "Checklist";
-  const id = data.id ? String(data.id) : `upload-${randomUUID()}`;
-  const version = data.version ? String(data.version) : "1.0";
-
-  const items = data.items.map((item: any, index: number) => normalizeChecklistItem(item, index));
+  for (const it of data.items) {
+    if (!it.id || !it.title) throw new Error("Checklist item must have id and title");
+  }
 
   return {
-    id,
-    name: String(name),
-    version,
-    items,
-  } satisfies Checklist;
+    title: data.title ?? "Checklist",
+    items: data.items.map((it: any) => ({
+      id: String(it.id),
+      title: String(it.title),
+      type: it.type ?? "recommended",
+      criteria: it.criteria ?? {},
+      confidence_threshold: it.confidence_threshold ?? 0.5,
+      llm_hint: it.llm_hint ?? undefined,
+      positive_patterns: Array.isArray(it.positive_patterns) ? it.positive_patterns : undefined,
+      negative_patterns: Array.isArray(it.negative_patterns) ? it.negative_patterns : undefined
+    }))
+  } as unknown as Checklist;
 }
 
-/**
- * Хелпер для Express-роутов: берёт файл из req и парсит.
- */
+/** Хелпер для Express-роутов: берёт файл из req и парсит. */
 export function parseChecklistFromRequest(req: Request): Checklist {
   const file = (req as any).file as UploadFile | undefined;
   const body = (req as any).body?.checklist as string | undefined;

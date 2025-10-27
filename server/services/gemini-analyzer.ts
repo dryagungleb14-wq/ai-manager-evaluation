@@ -31,7 +31,6 @@ export async function analyzeConversation(
   } catch (error) {
     if (error instanceof GeminiServiceError) throw error;
     const message = error instanceof Error ? error.message : "Неизвестная ошибка";
-    console.error("Gemini analysis error:", message);
     throw new GeminiServiceError(
       `Ошибка анализа диалога: ${message}`,
       502,
@@ -119,35 +118,32 @@ ${JSON.stringify(checklistItems, null, 2)}
                       properties: {
                         text: { type: "string" },
                         start: { type: "number" },
-                        end: { type: "number" },
+                        end: { type: "number" }
                       },
-                      required: ["text"],
-                    },
+                      required: ["text"]
+                    }
                   },
-                  comment: { type: "string" },
+                  comment: { type: "string" }
                 },
-                required: ["id", "status", "score", "evidence"],
-              },
+                required: ["id", "status", "score", "evidence"]
+              }
             },
-            summary: { type: "string" },
+            summary: { type: "string" }
           },
-          required: ["items", "summary"],
-        },
+          required: ["items", "summary"]
+        }
       },
-      contents,
+      contents
     })
   );
 
   const rawJson = response.text;
-  if (!rawJson) {
-    throw new GeminiServiceError("Gemini вернул пустой ответ", 502, "gemini_empty_response");
-  }
+  if (!rawJson) throw new GeminiServiceError("Gemini вернул пустой ответ", 502, "gemini_empty_response");
 
   let analysisData: any;
   try {
     analysisData = JSON.parse(rawJson);
   } catch (parseError) {
-    console.error("Failed to parse Gemini response");
     throw new GeminiServiceError(
       "Не удалось обработать ответ от AI. Попробуйте снова.",
       502,
@@ -157,7 +153,6 @@ ${JSON.stringify(checklistItems, null, 2)}
   }
 
   if (!analysisData.items || !Array.isArray(analysisData.items)) {
-    console.error("Invalid Gemini response structure");
     throw new GeminiServiceError("AI вернул некорректный формат данных", 502, "gemini_invalid_schema");
   }
 
@@ -170,7 +165,7 @@ ${JSON.stringify(checklistItems, null, 2)}
       status: (analyzed?.status || "uncertain") as ChecklistItemStatus,
       score: typeof analyzed?.score === "number" ? analyzed.score : 0,
       evidence: Array.isArray(analyzed?.evidence) ? analyzed.evidence : [],
-      comment: analyzed?.comment,
+      comment: analyzed?.comment
     };
   });
 
@@ -180,10 +175,10 @@ ${JSON.stringify(checklistItems, null, 2)}
       language,
       analyzed_at: new Date().toISOString(),
       duration: undefined,
-      volume: transcript.length,
+      volume: transcript.length
     },
     items: reportItems,
-    summary: analysisData.summary || "Анализ завершён",
+    summary: analysisData.summary || "Анализ завершён"
   };
 }
 
@@ -246,18 +241,18 @@ ${transcript}
                   client_phrase: { type: "string" },
                   manager_reply: { type: "string" },
                   handling: { type: "string" },
-                  advice: { type: "string" },
+                  advice: { type: "string" }
                 },
-                required: ["category", "client_phrase", "handling"],
-              },
+                required: ["category", "client_phrase", "handling"]
+              }
             },
             conversation_essence: { type: "string" },
-            outcome: { type: "string" },
+            outcome: { type: "string" }
           },
-          required: ["topics", "objections", "conversation_essence", "outcome"],
-        },
+          required: ["topics", "objections", "conversation_essence", "outcome"]
+        }
       },
-      contents,
+      contents
     })
   );
 
@@ -274,7 +269,6 @@ ${transcript}
   try {
     data = JSON.parse(rawJson);
   } catch (parseError) {
-    console.error("Failed to parse Gemini objections response");
     throw new GeminiServiceError(
       "Не удалось обработать ответ от AI при анализе возражений",
       502,
@@ -291,10 +285,10 @@ ${transcript}
           client_phrase: obj.client_phrase || "",
           manager_reply: obj.manager_reply || undefined,
           handling: (obj.handling || "unhandled") as ObjectionHandling,
-          advice: obj.advice || undefined,
+          advice: obj.advice || undefined
         }))
       : [],
     conversation_essence: data.conversation_essence || "Не удалось определить суть разговора",
-    outcome: data.outcome || "Итог не зафиксирован",
+    outcome: data.outcome || "Итог не зафиксирован"
   };
 }
