@@ -5,7 +5,7 @@ import {
   ObjectionsReport,
   ChecklistItemStatus,
   ObjectionHandling,
-} from "@shared/schema";
+} from "../shared/schema.js";
 
 // DON'T DELETE THIS COMMENT
 // Follow these instructions when using this blueprint:

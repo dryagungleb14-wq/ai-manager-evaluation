@@ -1,7 +1,8 @@
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import { GoogleGenAI } from "@google/genai";
-import { Checklist, ChecklistItem } from "@shared/schema";
+import { randomUUID } from "node:crypto";
+import { Checklist, ChecklistItem } from "../shared/schema.js";
 
 interface ParseResult {
   success: boolean;
@@ -75,7 +76,7 @@ ${content}
     
     // Добавляем ID и дефолтные значения
     const checklist: Checklist = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       name: parsed.name || filename.replace(/\.(txt|md)$/i, ''),
       version: "1.0",
       items: parsed.items.map((item: any, index: number) => ({
@@ -148,7 +149,7 @@ function parseCSV(content: string, filename: string): ParseResult {
     }).filter(item => item.title.length > 0);
 
     const checklist: Checklist = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       name: filename.replace(/\.csv$/i, ''),
       version: "1.0",
       items,
@@ -200,7 +201,7 @@ function parseExcel(buffer: Buffer, filename: string): ParseResult {
     }).filter(item => item.title.length > 0);
 
     const checklist: Checklist = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       name: filename.replace(/\.(xlsx?|xls)$/i, ''),
       version: "1.0",
       items,

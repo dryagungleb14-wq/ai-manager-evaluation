@@ -4,8 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p .",
-    "start": "node --enable-source-maps dist/index.js"
+    "dev": "tsx watch index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node --enable-source-maps dist/index.js",
+    "start:dev": "tsx index.ts"
+  },
+  "dependencies": {
+    "cors": "file:vendor/cors",
+    "dotenv": "file:vendor/dotenv",
+    "express": "^4.21.2"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",

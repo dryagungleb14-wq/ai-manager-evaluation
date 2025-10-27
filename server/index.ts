@@ -1,14 +1,124 @@
-import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
-import { seedDefaultChecklists, seedDefaultManagers } from "./storage";
+import express, { type Request, Response, NextFunction, type RequestHandler } from "express";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { registerRoutes } from "./routes.js";
+import { setupVite, serveStatic, log } from "./vite-server.js";
+import {
+  seedDefaultChecklists,
+  seedDefaultManagers,
+  storageInitializationError,
+  storageUsesDatabase,
+} from "./storage.js";
+import type { CorsOptions } from "./types/cors-options";
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+
+async function loadEnvConfig(): Promise<void> {
+  try {
+    const dotenvModule = await import("dotenv");
+    const configFn =
+      typeof dotenvModule.default?.config === "function"
+        ? dotenvModule.default.config
+        : typeof dotenvModule.config === "function"
+          ? dotenvModule.config
+          : null;
+
+    if (configFn) {
+      configFn();
+      return;
+    }
+  } catch {
+    // ignore and fall back to manual loader
+  }
+
+  const envPath = path.resolve(import.meta.dirname, ".env");
+
+  try {
+    await fs.access(envPath);
+  } catch {
+    return;
+  }
+
+  const contents = await fs.readFile(envPath, "utf-8");
+  const lines = contents.split(/\r?\n/);
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#") || !line.includes("=")) {
+      continue;
+    }
+
+    const [key, ...valueParts] = line.split("=");
+    const value = valueParts.join("=").trim().replace(/^['"]|['"]$/g, "");
+
+    if (key && !(key in process.env)) {
+      process.env[key] = value;
+    }
+  }
+}
+
+function normalizeCorsOrigins(config: string): string[] {
+  if (config === "*") {
+    return ["*"];
+  }
+
+  return config
+    .split(",")
+    .map(origin => origin.trim())
+    .filter((origin): origin is string => origin.length > 0);
+}
+
+function buildFallbackCorsMiddleware(allowedOrigins: string[], allowAll: boolean): RequestHandler {
+  return (req, res, next) => {
+    const requestOrigin = req.headers.origin;
+
+    if (allowAll) {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    } else if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
+      res.setHeader("Access-Control-Allow-Origin", requestOrigin);
+      res.setHeader("Vary", "Origin");
+    } else if (allowedOrigins.length > 0) {
+      res.setHeader("Access-Control-Allow-Origin", allowedOrigins[0]);
+      res.setHeader("Vary", "Origin");
+    }
+
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+
+    if (req.method === "OPTIONS") {
+      res.status(204).end();
+      return;
+    }
+
+    next();
+  };
+}
+
+async function createCorsMiddleware(originSetting: string): Promise<RequestHandler> {
+  const allowAll = originSetting === "*";
+  const allowedOrigins = normalizeCorsOrigins(originSetting);
+
+  try {
+    const corsModule = await import("cors");
+    const corsFactory = (corsModule as { default?: (options?: CorsOptions) => RequestHandler }).default
+      ?? (corsModule as unknown as (options?: CorsOptions) => RequestHandler);
+
+    if (allowAll) {
+      return corsFactory();
+    }
+
+    return corsFactory({ origin: allowedOrigins, credentials: true });
+  } catch (error) {
+    log(
+      `cors package unavailable (${error instanceof Error ? error.message : String(error)}); falling back to manual headers`,
+    );
+    return buildFallbackCorsMiddleware(allowedOrigins, allowAll);
+  }
+}
 
 app.get("/healthz", (_req, res) => {
-  res.json({ status: "ok" });
+  res.status(200).json({ status: "ok" });
 });
 
 app.use((req, res, next) => {
@@ -42,6 +152,25 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await loadEnvConfig();
+
+  const nodeEnv = process.env.NODE_ENV ?? "production";
+  app.set("env", nodeEnv);
+
+  const corsOrigin = process.env.CORS_ORIGIN ?? "*";
+  const corsMiddleware = await createCorsMiddleware(corsOrigin);
+  app.use(corsMiddleware);
+
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: false }));
+
+  if (!storageUsesDatabase) {
+    const fallbackMessage = storageInitializationError
+      ? `Database unavailable (${storageInitializationError.message}). Falling back to in-memory storage.`
+      : "Database unavailable. Falling back to in-memory storage.";
+    log(fallbackMessage, "storage");
+  }
+
   // Seed default checklists on startup (only if database is empty)
   const defaultChecklists = [
     {
@@ -172,7 +301,7 @@ app.use((req, res, next) => {
   await seedDefaultChecklists(defaultChecklists);
   await seedDefaultManagers();
   
-  const server = await registerRoutes(app);
+  await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -185,22 +314,14 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
+  const port = Number(process.env.PORT) || 3000;
+  const server = app.listen(port, "0.0.0.0", () => {
+    log(`serving on port ${port}`);
+  });
+
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
-
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
 })();
