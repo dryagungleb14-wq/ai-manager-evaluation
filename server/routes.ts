@@ -268,7 +268,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       }
 
       // Parse checklist from file
-      const checklist = parseChecklist(req.file);
+      const checklist = await parseChecklist(req.file);
 
       // Save parsed checklist to database
       const created = await storage.createChecklist(checklist);
