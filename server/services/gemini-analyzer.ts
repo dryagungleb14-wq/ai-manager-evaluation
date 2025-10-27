@@ -31,6 +31,7 @@ export async function analyzeConversation(
   } catch (error) {
     if (error instanceof GeminiServiceError) throw error;
     const message = error instanceof Error ? error.message : "Неизвестная ошибка";
+    console.error("Gemini analysis error:", message);
     throw new GeminiServiceError(
       `Ошибка анализа диалога: ${message}`,
       502,

@@ -1,10 +1,30 @@
 import type { Request } from "express";
-import type { Checklist } from "../shared/schema.js";
+import type { Checklist, ChecklistItemType } from "../shared/schema.js";
 
 type UploadFile = Express.Multer.File | { originalname?: string; buffer?: Buffer };
 
+type RawChecklistItem = {
+  id?: unknown;
+  title?: unknown;
+  type?: unknown;
+  criteria?: {
+    llm_hint?: unknown;
+    positive_patterns?: unknown;
+    negative_patterns?: unknown;
+  };
+  confidence_threshold?: unknown;
+};
+
+type RawChecklist = {
+  id?: unknown;
+  name?: unknown;
+  title?: unknown;
+  version?: unknown;
+  items?: unknown;
+};
+
 function isUploadFile(x: unknown): x is UploadFile {
-  return !!x && typeof x === "object" && ("buffer" in (x as any));
+  return !!x && typeof x === "object" && "buffer" in (x as any);
 }
 
 function toStringInput(input: unknown): string | null {
@@ -22,35 +42,72 @@ function safeParseJSON<T = unknown>(raw: string): T {
   }
 }
 
+function normalizeType(value: unknown): ChecklistItemType {
+  const allowed: ChecklistItemType[] = ["mandatory", "recommended", "prohibited"];
+  if (typeof value === "string" && allowed.includes(value as ChecklistItemType)) {
+    return value as ChecklistItemType;
+  }
+  return "recommended";
+}
+
+function normalizeChecklist(raw: RawChecklist): Checklist {
+  if (!raw.items || !Array.isArray(raw.items)) {
+    throw new Error("Checklist JSON must contain items[]");
+  }
+
+  const items = raw.items.map((item) => {
+    const rawItem = item as RawChecklistItem;
+    if (!rawItem.id || !rawItem.title) {
+      throw new Error("Checklist item must have id and title");
+    }
+
+    const rawCriteria = rawItem.criteria ?? {};
+    const llmHint = typeof rawCriteria.llm_hint === "string" ? rawCriteria.llm_hint : "";
+    const positivePatterns = Array.isArray(rawCriteria.positive_patterns)
+      ? rawCriteria.positive_patterns.filter((entry): entry is string => typeof entry === "string")
+      : undefined;
+    const negativePatterns = Array.isArray(rawCriteria.negative_patterns)
+      ? rawCriteria.negative_patterns.filter((entry): entry is string => typeof entry === "string")
+      : undefined;
+
+    return {
+      id: String(rawItem.id),
+      title: String(rawItem.title),
+      type: normalizeType(rawItem.type),
+      criteria: {
+        llm_hint: llmHint,
+        ...(positivePatterns ? { positive_patterns: positivePatterns } : {}),
+        ...(negativePatterns ? { negative_patterns: negativePatterns } : {}),
+      },
+      confidence_threshold:
+        typeof rawItem.confidence_threshold === "number" && rawItem.confidence_threshold >= 0
+          ? rawItem.confidence_threshold
+          : 0.6,
+    };
+  });
+
+  const id = typeof raw.id === "string" && raw.id.trim().length > 0 ? raw.id : "temporary-checklist";
+  const nameCandidate = typeof raw.name === "string" && raw.name.trim().length > 0 ? raw.name : undefined;
+  const titleCandidate = typeof raw.title === "string" && raw.title.trim().length > 0 ? raw.title : undefined;
+
+  return {
+    id,
+    name: nameCandidate ?? titleCandidate ?? "Checklist",
+    version: typeof raw.version === "string" && raw.version.trim().length > 0 ? raw.version : "1.0",
+    items,
+  };
+}
+
 /** Универсальный парсер чек-листа. */
 export function parseChecklist(input: unknown): Checklist {
   if (input && typeof input === "object" && !isUploadFile(input)) {
-    return input as Checklist;
+    return normalizeChecklist(input as RawChecklist);
   }
   const str = toStringInput(input);
   if (!str) throw new Error("Checklist input is empty");
 
-  const data = safeParseJSON<any>(str);
-  if (!data || !Array.isArray(data.items)) {
-    throw new Error("Checklist JSON must contain items[]");
-  }
-  for (const it of data.items) {
-    if (!it.id || !it.title) throw new Error("Checklist item must have id and title");
-  }
-
-  return {
-    title: data.title ?? "Checklist",
-    items: data.items.map((it: any) => ({
-      id: String(it.id),
-      title: String(it.title),
-      type: it.type ?? "recommended",
-      criteria: it.criteria ?? {},
-      confidence_threshold: it.confidence_threshold ?? 0.5,
-      llm_hint: it.llm_hint ?? undefined,
-      positive_patterns: Array.isArray(it.positive_patterns) ? it.positive_patterns : undefined,
-      negative_patterns: Array.isArray(it.negative_patterns) ? it.negative_patterns : undefined
-    }))
-  } as unknown as Checklist;
+  const data = safeParseJSON<RawChecklist>(str);
+  return normalizeChecklist(data);
 }
 
 /** Хелпер для Express-роутов: берёт файл из req и парсит. */
