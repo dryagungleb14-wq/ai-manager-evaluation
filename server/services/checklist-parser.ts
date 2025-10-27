@@ -23,6 +23,8 @@ type ChecklistItemLike = {
   confidence_threshold?: unknown;
 };
 
+const DEFAULT_CONFIDENCE_THRESHOLD = 0.6;
+
 function isUploadFile(x: unknown): x is UploadFile {
   return !!x && typeof x === "object" && ("buffer" in (x as any));
 }
@@ -62,7 +64,10 @@ function normalizeChecklist(raw: ChecklistLike): Checklist {
     }
 
     const criteria = candidate.criteria ?? {};
-    const llmHint = typeof criteria.llm_hint === "string" && criteria.llm_hint.trim().length > 0 ? criteria.llm_hint : "";
+    const llmHint =
+      typeof criteria.llm_hint === "string" && criteria.llm_hint.trim().length > 0
+        ? criteria.llm_hint.trim()
+        : "";
     const positivePatterns = Array.isArray(criteria.positive_patterns)
       ? criteria.positive_patterns.filter((entry): entry is string => typeof entry === "string")
       : undefined;
@@ -70,19 +75,21 @@ function normalizeChecklist(raw: ChecklistLike): Checklist {
       ? criteria.negative_patterns.filter((entry): entry is string => typeof entry === "string")
       : undefined;
 
+    const normalizedCriteria: Checklist["items"][number]["criteria"] = {
+      llm_hint: llmHint,
+      ...(positivePatterns ? { positive_patterns: positivePatterns } : {}),
+      ...(negativePatterns ? { negative_patterns: negativePatterns } : {}),
+    };
+
     return {
       id: String(candidate.id),
       title: String(candidate.title),
       type: normalizeType(candidate.type),
-      criteria: {
-        llm_hint: llmHint,
-        ...(positivePatterns ? { positive_patterns: positivePatterns } : {}),
-        ...(negativePatterns ? { negative_patterns: negativePatterns } : {}),
-      },
+      criteria: normalizedCriteria,
       confidence_threshold:
         typeof candidate.confidence_threshold === "number" && candidate.confidence_threshold >= 0
           ? candidate.confidence_threshold
-          : 0.6,
+          : DEFAULT_CONFIDENCE_THRESHOLD,
     };
   });
 
