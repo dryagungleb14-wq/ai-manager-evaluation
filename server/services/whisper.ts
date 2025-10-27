@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { executeGeminiRequest, getGeminiClient, GeminiServiceError, type GeminiContentResponse } from "./gemini-client.js";
+import { executeGeminiRequest, getGeminiClient, GeminiServiceError } from "./gemini-client.js";
 
 export interface TranscriptionResult {
   text: string;
@@ -37,7 +37,7 @@ export async function transcribeAudio(
     if (language) prompt = `Transcribe this audio in ${language} language. ` + prompt;
 
     const client = getGeminiClient();
-    const response = await executeGeminiRequest<GeminiContentResponse>(() =>
+    const response = await executeGeminiRequest(() =>
       client.models.generateContent({
         model: "gemini-2.5-flash",
         contents: [
@@ -57,8 +57,8 @@ export async function transcribeAudio(
       })
     );
 
-    const transcriptionText = response.text ?? "";
-    if (!transcriptionText.trim()) {
+    const transcriptionText = response.text;
+    if (!transcriptionText || !transcriptionText.trim()) {
       throw new GeminiServiceError(
         "Gemini не вернул расшифровку. Проверьте формат аудио и API ключ.",
         502,

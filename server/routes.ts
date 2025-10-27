@@ -7,7 +7,7 @@ import { transcribeAudio } from "./services/whisper.js";
 import { analyzeConversation } from "./services/gemini-analyzer.js";
 import { generateMarkdownReport } from "./services/markdown-generator.js";
 import { generatePDFReport } from "./services/pdf-generator.js";
-import { parseChecklistFile } from "./services/checklist-parser.js";
+import { parseChecklist } from "./services/checklist-parser.js";
 import { checklistSchema, analyzeRequestSchema, insertManagerSchema } from "./shared/schema.js";
 import { GeminiServiceError } from "./services/gemini-client.js";
 
@@ -268,18 +268,10 @@ export async function registerRoutes(app: Express): Promise<void> {
       }
 
       // Parse checklist from file
-      const result = await parseChecklistFile(req.file);
-
-      if (!result.success) {
-        return res.status(400).json({ error: result.error });
-      }
-
-      if (!result.checklist) {
-        return res.status(500).json({ error: "Не удалось создать чек-лист" });
-      }
+      const checklist = parseChecklist(req.file);
 
       // Save parsed checklist to database
-      const created = await storage.createChecklist(result.checklist);
+      const created = await storage.createChecklist(checklist);
       
       res.status(201).json(created);
     } catch (error) {
