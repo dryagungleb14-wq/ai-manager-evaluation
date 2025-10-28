@@ -82,15 +82,15 @@ function normalizeChecklist(raw: ChecklistLike): Checklist {
     }
 
     const criteria = candidate.criteria ?? {};
-    const llmHint =
+    const rawHint =
       typeof criteria.llm_hint === "string" && criteria.llm_hint.trim().length > 0
         ? criteria.llm_hint.trim()
-        : "";
+        : undefined;
     const positivePatterns = normalizePatterns(criteria.positive_patterns);
     const negativePatterns = normalizePatterns(criteria.negative_patterns);
 
     const normalizedCriteria: Checklist["items"][number]["criteria"] = {
-      llm_hint: llmHint,
+      llm_hint: rawHint ?? "",
       ...(positivePatterns ? { positive_patterns: positivePatterns } : {}),
       ...(negativePatterns ? { negative_patterns: negativePatterns } : {}),
     };
