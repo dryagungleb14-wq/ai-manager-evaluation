@@ -2,29 +2,133 @@ import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import { getGeminiClient } from "../lib/gemini-client.js";
 import { randomUUID } from "node:crypto";
-import { Checklist, ChecklistItem } from "../shared/schema.js";
+import type { Request } from "express";
+import Papa from "papaparse";
+import * as XLSX from "xlsx";
+import type { Checklist, ChecklistItemType } from "../shared/schema.js";
+import { executeGeminiRequest, getGeminiClient } from "./gemini-client.js";
 
-interface ParseResult {
-  success: boolean;
-  checklist?: Checklist;
-  error?: string;
+type UploadFile = Express.Multer.File | { originalname?: string; buffer?: Buffer };
+
+type ChecklistLike = {
+  id?: unknown;
+  name?: unknown;
+  title?: unknown;
+  version?: unknown;
+  items?: unknown;
+};
+
+type ChecklistItemLike = {
+  id?: unknown;
+  title?: unknown;
+  type?: unknown;
+  criteria?: {
+    llm_hint?: unknown;
+    positive_patterns?: unknown;
+    negative_patterns?: unknown;
+  };
+  confidence_threshold?: unknown;
+};
+
+const DEFAULT_CONFIDENCE_THRESHOLD = 0.6;
+
+const TEXTUAL_EXTENSIONS = new Set([".txt", ".md"]);
+const CSV_EXTENSIONS = new Set([".csv"]); 
+const EXCEL_EXTENSIONS = new Set([".xlsx", ".xls"]);
+
+function normalizeConfidenceThreshold(value: unknown): number {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return DEFAULT_CONFIDENCE_THRESHOLD;
+  }
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
 }
 
-// AI-парсинг текстовых файлов (TXT, MD)
-async function parseTextWithAI(content: string, filename: string): Promise<ParseResult> {
-  // Check if API key is available
-  if (!process.env.GEMINI_API_KEY) {
-    return {
-      success: false,
-      error: "GEMINI_API_KEY не настроен. Для парсинга TXT/MD файлов требуется Gemini API. Используйте CSV или Excel формат, или настройте API ключ в Secrets."
-    };
+function normalizePatterns(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const normalized = value
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function isUploadFile(x: unknown): x is UploadFile {
+  return !!x && typeof x === "object" && ("buffer" in (x as any));
+}
+
+function toStringInput(input: unknown): string | null {
+  if (typeof input === "string") return input;
+  if (Buffer.isBuffer(input)) return input.toString("utf8");
+  if (isUploadFile(input) && input.buffer) return input.buffer.toString("utf8");
+  return null;
+}
+
+function safeParseJSON<T = unknown>(raw: string): T {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new Error("Invalid checklist JSON");
   }
+}
+
+function normalizeType(value: unknown): ChecklistItemType {
+  const allowed: ChecklistItemType[] = ["mandatory", "recommended", "prohibited"];
+  if (typeof value === "string" && allowed.includes(value as ChecklistItemType)) {
+    return value as ChecklistItemType;
+  }
+  return "recommended";
+}
+
+function normalizeChecklist(raw: ChecklistLike): Checklist {
+  if (!raw.items || !Array.isArray(raw.items)) {
+    throw new Error("Checklist JSON must contain items[]");
+  }
+
+  const items = raw.items.map((item, index) => {
+    const candidate = item as ChecklistItemLike;
+    if (!candidate.id || !candidate.title) {
+      throw new Error("Checklist item must have id and title");
+    }
+
+    const id = String(candidate.id).trim();
+    const title = String(candidate.title).trim();
+    if (!id) {
+      throw new Error(`Checklist item at index ${index} has empty id after normalization`);
+    }
+    if (!title) {
+      throw new Error(`Checklist item ${id} has empty title after normalization`);
+    }
+
+    const criteria = candidate.criteria ?? {};
+    const rawHint =
+      typeof criteria.llm_hint === "string" && criteria.llm_hint.trim().length > 0
+        ? criteria.llm_hint.trim()
+        : undefined;
+    const positivePatterns = normalizePatterns(criteria.positive_patterns);
+    const negativePatterns = normalizePatterns(criteria.negative_patterns);
+
+    const normalizedCriteria: Checklist["items"][number]["criteria"] = {
+      llm_hint: rawHint ?? title,
+      ...(positivePatterns ? { positive_patterns: positivePatterns } : {}),
+      ...(negativePatterns ? { negative_patterns: negativePatterns } : {}),
+    };
+
+    return {
+      id,
+      title,
+      type: normalizeType(candidate.type),
+      criteria: normalizedCriteria,
+      confidence_threshold: normalizeConfidenceThreshold(candidate.confidence_threshold),
+    };
+  });
 
   try {
     // Lazy initialization of Gemini client
     const geminiClient = getGeminiClient();
 
-    const prompt = `Ты эксперт по анализу чек-листов для оценки работы менеджеров.
+  const prompt = `Ты эксперт по анализу чек-листов для оценки работы менеджеров.
 
 Проанализируй следующий текст чек-листа и преобразуй его в структурированный JSON формат.
 
@@ -86,166 +190,207 @@ ${content}
           positive_patterns: item.criteria.positive_patterns || [],
           negative_patterns: item.criteria.negative_patterns || [],
         },
-        confidence_threshold: 0.6,
-      })) as ChecklistItem[],
-    };
+      ],
+    }),
+  );
 
-    return { success: true, checklist };
-  } catch (error) {
-    console.error("AI parsing error:", error);
-    return { 
-      success: false, 
-      error: `Ошибка AI-парсинга: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}` 
-    };
+  const responseText = response.text;
+  if (!responseText) {
+    throw new Error("Gemini вернул пустой ответ при парсинге чек-листа");
   }
+
+  let parsed: ChecklistLike;
+  try {
+    parsed = safeParseJSON<ChecklistLike>(responseText);
+  } catch (error) {
+    throw new Error(
+      `Ошибка AI-парсинга: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`,
+    );
+  }
+
+  const fallbackName = filename.replace(/\.(txt|md)$/i, "");
+  const checklistLike: ChecklistLike = {
+    ...parsed,
+    name:
+      typeof parsed.name === "string" && parsed.name.trim().length > 0
+        ? parsed.name.trim()
+        : fallbackName || "Checklist",
+    version:
+      typeof parsed.version === "string" && parsed.version.trim().length > 0
+        ? parsed.version.trim()
+        : undefined,
+    items: Array.isArray(parsed.items)
+      ? parsed.items.map((item, index) => ({
+          id: (item as ChecklistItemLike)?.id ?? `item-${index + 1}`,
+          title: (item as ChecklistItemLike)?.title,
+          type: (item as ChecklistItemLike)?.type,
+          criteria: (item as ChecklistItemLike)?.criteria,
+          confidence_threshold: (item as ChecklistItemLike)?.confidence_threshold ?? DEFAULT_CONFIDENCE_THRESHOLD,
+        }))
+      : [],
+  };
+
+  return normalizeChecklist(checklistLike);
 }
 
-// Парсинг CSV файлов
-function parseCSV(content: string, filename: string): ParseResult {
-  try {
-    const parsed = Papa.parse(content, {
-      header: true,
-      skipEmptyLines: true,
+function parseCSV(content: string, filename: string): Checklist {
+  const result = Papa.parse<Record<string, unknown>>(content, {
+    header: true,
+    skipEmptyLines: true,
+  });
+
+  if (result.errors.length > 0) {
+    throw new Error(`Ошибка парсинга CSV: ${result.errors[0].message}`);
+  }
+
+  const items = result.data.reduce<ChecklistItemLike[]>((acc, row, index) => {
+    const rawTitle =
+      (row["Пункт"] as string) ||
+      (row["Название"] as string) ||
+      (row["Title"] as string) ||
+      (row["Item"] as string) ||
+      (row["пункт"] as string) ||
+      "";
+    const title = typeof rawTitle === "string" ? rawTitle.trim() : "";
+
+    if (!title) {
+      return acc;
+    }
+
+    const typeRaw =
+      ((row["Тип"] as string) || row["Type"] || row["тип"])?.toString().trim() ||
+      "mandatory";
+
+    const rawHint =
+      (row["Описание"] as string) ||
+      (row["Description"] as string) ||
+      (row["LLM Hint"] as string) ||
+      (row["описание"] as string) ||
+      "";
+    const hint = rawHint ? rawHint.toString().trim() : "";
+
+    acc.push({
+      id: `item-${index + 1}`,
+      title,
+      type: typeRaw,
+      criteria: {
+        llm_hint: hint || title,
+        positive_patterns: [],
+        negative_patterns: [],
+      },
+      confidence_threshold: DEFAULT_CONFIDENCE_THRESHOLD,
     });
 
-    if (parsed.errors.length > 0) {
-      return { 
-        success: false, 
-        error: `Ошибка парсинга CSV: ${parsed.errors[0].message}` 
-      };
-    }
+    return acc;
+  }, []);
 
-    const items: ChecklistItem[] = parsed.data.map((row: any, index: number) => {
-      // Поддержка различных названий колонок
-      const title = row['Пункт'] || row['Название'] || row['Title'] || row['Item'] || row['пункт'] || '';
-      const typeRaw = row['Тип'] || row['Type'] || row['тип'] || 'mandatory';
-      const hint = row['Описание'] || row['Description'] || row['LLM Hint'] || row['описание'] || title;
-      
-      // Преобразование типа
-      let type: 'mandatory' | 'recommended' | 'prohibited' = 'mandatory';
-      const typeLower = typeRaw.toLowerCase();
-      
-      if (typeLower.includes('обязат') || typeLower === 'mandatory' || typeLower === 'required') {
-        type = 'mandatory';
-      } else if (typeLower.includes('рекоменд') || typeLower === 'recommended') {
-        type = 'recommended';
-      } else if (typeLower.includes('запрещ') || typeLower === 'prohibited' || typeLower === 'forbidden') {
-        type = 'prohibited';
-      }
+  const checklistLike: ChecklistLike = {
+    name: filename.replace(/\.csv$/i, ""),
+    version: "1.0",
+    items,
+  };
 
-      return {
-        id: `item-${index + 1}`,
-        title: title.trim(),
-        type,
-        criteria: {
-          llm_hint: hint.trim(),
-          positive_patterns: [],
-          negative_patterns: [],
-        },
-        confidence_threshold: 0.6,
-      };
-    }).filter(item => item.title.length > 0);
-
-    const checklist: Checklist = {
-      id: randomUUID(),
-      name: filename.replace(/\.csv$/i, ''),
-      version: "1.0",
-      items,
-    };
-
-    return { success: true, checklist };
-  } catch (error) {
-    return { 
-      success: false, 
-      error: `Ошибка парсинга CSV: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}` 
-    };
-  }
+  return normalizeChecklist(checklistLike);
 }
 
-// Парсинг Excel файлов
-function parseExcel(buffer: Buffer, filename: string): ParseResult {
-  try {
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_json(firstSheet);
+function parseExcel(buffer: Buffer, filename: string): Checklist {
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+  const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet);
 
-    const items: ChecklistItem[] = data.map((row: any, index: number) => {
-      const title = row['Пункт'] || row['Название'] || row['Title'] || row['Item'] || '';
-      const typeRaw = row['Тип'] || row['Type'] || 'mandatory';
-      const hint = row['Описание'] || row['Description'] || row['LLM Hint'] || title;
-      
-      let type: 'mandatory' | 'recommended' | 'prohibited' = 'mandatory';
-      const typeLower = String(typeRaw).toLowerCase();
-      
-      if (typeLower.includes('обязат') || typeLower === 'mandatory') {
-        type = 'mandatory';
-      } else if (typeLower.includes('рекоменд') || typeLower === 'recommended') {
-        type = 'recommended';
-      } else if (typeLower.includes('запрещ') || typeLower === 'prohibited') {
-        type = 'prohibited';
-      }
+  const items = data.reduce<ChecklistItemLike[]>((acc, row, index) => {
+    const rawTitle =
+      (row["Пункт"] as string) ||
+      (row["Название"] as string) ||
+      (row["Title"] as string) ||
+      (row["Item"] as string) ||
+      "";
+    const title = typeof rawTitle === "string" ? rawTitle.trim() : "";
 
-      return {
-        id: `item-${index + 1}`,
-        title: String(title).trim(),
-        type,
-        criteria: {
-          llm_hint: String(hint).trim(),
-          positive_patterns: [],
-          negative_patterns: [],
-        },
-        confidence_threshold: 0.6,
-      };
-    }).filter(item => item.title.length > 0);
+    if (!title) {
+      return acc;
+    }
 
-    const checklist: Checklist = {
-      id: randomUUID(),
-      name: filename.replace(/\.(xlsx?|xls)$/i, ''),
-      version: "1.0",
-      items,
-    };
+    const typeRaw = ((row["Тип"] as string) || row["Type"])?.toString().trim() || "mandatory";
 
-    return { success: true, checklist };
-  } catch (error) {
-    return { 
-      success: false, 
-      error: `Ошибка парсинга Excel: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}` 
-    };
-  }
+    const rawHint =
+      (row["Описание"] as string) ||
+      (row["Description"] as string) ||
+      (row["LLM Hint"] as string) ||
+      "";
+    const hint = rawHint ? rawHint.toString().trim() : "";
+
+    acc.push({
+      id: `item-${index + 1}`,
+      title,
+      type: typeRaw,
+      criteria: {
+        llm_hint: hint || title,
+        positive_patterns: [],
+        negative_patterns: [],
+      },
+      confidence_threshold: DEFAULT_CONFIDENCE_THRESHOLD,
+    });
+
+    return acc;
+  }, []);
+
+  const checklistLike: ChecklistLike = {
+    name: filename.replace(/\.(xlsx?|xls)$/i, ""),
+    version: "1.0",
+    items,
+  };
+
+  return normalizeChecklist(checklistLike);
 }
 
-// Главная функция парсинга
-export async function parseChecklistFile(
-  file: Express.Multer.File
-): Promise<ParseResult> {
-  const filename = file.originalname;
-  const ext = filename.split('.').pop()?.toLowerCase();
-
-  try {
-    switch (ext) {
-      case 'txt':
-      case 'md':
-        const textContent = file.buffer.toString('utf-8');
-        return await parseTextWithAI(textContent, filename);
-
-      case 'csv':
-        const csvContent = file.buffer.toString('utf-8');
-        return parseCSV(csvContent, filename);
-
-      case 'xlsx':
-      case 'xls':
-        return parseExcel(file.buffer, filename);
-
-      default:
-        return { 
-          success: false, 
-          error: `Неподдерживаемый формат файла: ${ext}. Используйте TXT, MD, CSV или XLSX` 
-        };
-    }
-  } catch (error) {
-    return { 
-      success: false, 
-      error: `Ошибка обработки файла: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}` 
-    };
+async function parseUploadFile(file: UploadFile): Promise<Checklist> {
+  if (!file || !file.buffer) {
+    throw new Error("Checklist file buffer is empty");
   }
+
+  const filename = file.originalname ?? "checklist";
+  const ext = path.extname(filename).toLowerCase();
+
+  if (TEXTUAL_EXTENSIONS.has(ext)) {
+    const content = file.buffer.toString("utf8");
+    return parseTextWithAI(content, filename);
+  }
+
+  if (CSV_EXTENSIONS.has(ext)) {
+    const content = file.buffer.toString("utf8");
+    return parseCSV(content, filename);
+  }
+
+  if (EXCEL_EXTENSIONS.has(ext)) {
+    return parseExcel(file.buffer, filename);
+  }
+
+  const stringContent = file.buffer.toString("utf8");
+  const raw = safeParseJSON<ChecklistLike>(stringContent);
+  return normalizeChecklist(raw);
+}
+
+export async function parseChecklist(input: unknown): Promise<Checklist> {
+  if (isUploadFile(input)) {
+    return parseUploadFile(input);
+  }
+
+  if (input && typeof input === "object") {
+    return normalizeChecklist(input as ChecklistLike);
+  }
+
+  const str = toStringInput(input);
+  if (!str) throw new Error("Checklist input is empty");
+
+  const data = safeParseJSON<ChecklistLike>(str);
+  return normalizeChecklist(data);
+}
+
+export async function parseChecklistFromRequest(req: Request): Promise<Checklist> {
+  const file = (req as any).file as UploadFile | undefined;
+  const body = (req as any).body?.checklist as string | undefined;
+  if (file) return parseChecklist(file);
+  if (body) return parseChecklist(body);
+  throw new Error("Checklist not provided (file or body.checklist)");
 }

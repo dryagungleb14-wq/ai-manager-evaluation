@@ -1,7 +1,7 @@
 // Integration: blueprint:javascript_database
 import { Checklist, AnalysisReport, Manager, checklists, analyses, managers } from "./shared/schema.js";
 import { eq, desc } from "drizzle-orm";
-import type { DatabaseClient } from "./db.js";
+import { getDatabase, type DatabaseClient } from "./db.js";
 
 export type StoredAnalysis = {
   id: string;
@@ -16,14 +16,8 @@ export type StoredAnalysis = {
 };
 
 let databaseClient: DatabaseClient | null = null;
-let databaseInitError: Error | null = null;
-
-try {
-  const module = await import("./db.js");
-  databaseClient = module.db;
-} catch (error) {
-  databaseInitError = error instanceof Error ? error : new Error(String(error));
-}
+export let storageInitializationError: Error | null = null;
+export let storageUsesDatabase = false;
 
 export interface IStorage {
   // Managers
@@ -51,6 +45,8 @@ export interface IStorage {
   getAllAnalyses(): Promise<StoredAnalysis[]>;
   deleteAnalysis(id: string): Promise<boolean>;
 }
+
+export let storage: IStorage;
 
 export class DatabaseStorage implements IStorage {
   constructor(private readonly db: DatabaseClient) {}
@@ -492,13 +488,23 @@ class InMemoryStorage implements IStorage {
   }
 }
 
-const storageInstance: IStorage = databaseClient
-  ? new DatabaseStorage(databaseClient)
-  : new InMemoryStorage();
 
-export const storage = storageInstance;
-export const storageInitializationError = databaseInitError;
-export const storageUsesDatabase = databaseClient !== null;
+function initializeStorage(): void {
+  storage = new InMemoryStorage();
+
+  getDatabase()
+    .then((client) => {
+      databaseClient = client;
+      storage = new DatabaseStorage(client);
+      storageUsesDatabase = true;
+    })
+    .catch((error) => {
+      storageInitializationError = error instanceof Error ? error : new Error(String(error));
+      storageUsesDatabase = false;
+    });
+}
+
+initializeStorage();
 
 // Seed function to initialize default managers
 export async function seedDefaultManagers(): Promise<void> {

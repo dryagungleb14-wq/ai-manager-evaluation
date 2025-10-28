@@ -13,6 +13,17 @@ import type { CorsOptions } from "./types/cors-options";
 
 const app = express();
 
+type OriginMatcher = string | RegExp;
+
+const DEFAULT_ALLOWED_ORIGINS: OriginMatcher[] = [
+  /^https:\/\/([a-z0-9-]+-)*[a-z0-9-]+\.vercel\.app$/i,
+];
+
+let serviceVersion =
+  process.env.APP_VERSION?.trim()
+    ?? process.env.npm_package_version?.trim()
+    ?? "unknown";
+
 async function loadEnvConfig(): Promise<void> {
   try {
     const dotenvModule = await import("dotenv");
@@ -57,32 +68,56 @@ async function loadEnvConfig(): Promise<void> {
   }
 }
 
-function normalizeCorsOrigins(config: string): string[] {
-  if (config === "*") {
-    return ["*"];
+function buildOriginConfig(originSetting: string | undefined): { allowAll: boolean; matchers: OriginMatcher[] } {
+  if (originSetting?.trim() === "*") {
+    return { allowAll: true, matchers: [] };
   }
 
-  return config
+  if (!originSetting || originSetting.trim().length === 0) {
+    return { allowAll: false, matchers: DEFAULT_ALLOWED_ORIGINS };
+  }
+
+  const tokens = originSetting
     .split(",")
-    .map(origin => origin.trim())
-    .filter((origin): origin is string => origin.length > 0);
+    .map(entry => entry.trim())
+    .filter((entry): entry is string => entry.length > 0);
+
+  const matchers: OriginMatcher[] = tokens.map((entry) => {
+    if (entry.includes("*")) {
+      const escaped = entry
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        .replace(/\\\*/g, ".*");
+      return new RegExp(`^${escaped}$`, "i");
+    }
+
+    return entry;
+  });
+
+  return { allowAll: false, matchers: matchers.length > 0 ? matchers : DEFAULT_ALLOWED_ORIGINS };
 }
 
-function buildFallbackCorsMiddleware(allowedOrigins: string[], allowAll: boolean): RequestHandler {
+function originMatches(origin: string, matchers: OriginMatcher[]): boolean {
+  return matchers.some((matcher) => {
+    if (typeof matcher === "string") {
+      return matcher === origin;
+    }
+
+    return matcher.test(origin);
+  });
+}
+
+function buildFallbackCorsMiddleware(matchers: OriginMatcher[], allowAll: boolean): RequestHandler {
   return (req, res, next) => {
     const requestOrigin = req.headers.origin;
 
     if (allowAll) {
       res.setHeader("Access-Control-Allow-Origin", "*");
-    } else if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
+    } else if (requestOrigin && originMatches(requestOrigin, matchers)) {
       res.setHeader("Access-Control-Allow-Origin", requestOrigin);
-      res.setHeader("Vary", "Origin");
-    } else if (allowedOrigins.length > 0) {
-      res.setHeader("Access-Control-Allow-Origin", allowedOrigins[0]);
       res.setHeader("Vary", "Origin");
     }
 
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.setHeader("Access-Control-Allow-Credentials", "true");
 
@@ -95,9 +130,27 @@ function buildFallbackCorsMiddleware(allowedOrigins: string[], allowAll: boolean
   };
 }
 
-async function createCorsMiddleware(originSetting: string): Promise<RequestHandler> {
-  const allowAll = originSetting === "*";
-  const allowedOrigins = normalizeCorsOrigins(originSetting);
+async function ensureServiceVersionLoaded(): Promise<void> {
+  if (serviceVersion && serviceVersion !== "unknown") {
+    return;
+  }
+
+  const packageJsonPath = path.resolve(import.meta.dirname, "package.json");
+
+  try {
+    const contents = await fs.readFile(packageJsonPath, "utf-8");
+    const parsed = JSON.parse(contents) as { version?: string };
+
+    if (parsed.version) {
+      serviceVersion = parsed.version;
+    }
+  } catch {
+    // ignore, fall back to default version placeholder
+  }
+}
+
+async function createCorsMiddleware(originSetting: string | undefined): Promise<RequestHandler> {
+  const { allowAll, matchers } = buildOriginConfig(originSetting);
 
   try {
     const corsModule = await import("cors");
@@ -105,24 +158,49 @@ async function createCorsMiddleware(originSetting: string): Promise<RequestHandl
       ?? (corsModule as unknown as (options?: CorsOptions) => RequestHandler);
 
     if (allowAll) {
-      return corsFactory();
+      return corsFactory({
+        methods: ["GET", "POST", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization"],
+        credentials: true,
+      });
     }
 
-    return corsFactory({ origin: allowedOrigins, credentials: true });
+    return corsFactory({
+      origin(origin, callback) {
+        if (!origin) {
+          callback(null, true);
+          return;
+        }
+
+        if (originMatches(origin, matchers)) {
+          callback(null, true);
+          return;
+        }
+
+        callback(new Error("Not allowed by CORS"));
+      },
+      credentials: true,
+      methods: ["GET", "POST", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+    });
   } catch (error) {
     log(
       `cors package unavailable (${error instanceof Error ? error.message : String(error)}); falling back to manual headers`,
     );
-    return buildFallbackCorsMiddleware(allowedOrigins, allowAll);
+    return buildFallbackCorsMiddleware(matchers, allowAll);
   }
 }
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ status: "ok" });
+  res.status(200).json({ status: "ok", version: serviceVersion });
 });
 
 app.get("/health", (_req, res) => {
-  res.status(200).json({ status: "ok" });
+  res.status(200).json({ status: "ok", version: serviceVersion, uptime: process.uptime() });
+});
+
+app.get("/version", (_req, res) => {
+  res.status(200).json({ version: serviceVersion });
 });
 
 app.use((req, res, next) => {
@@ -157,11 +235,12 @@ app.use((req, res, next) => {
 
 (async () => {
   await loadEnvConfig();
+  await ensureServiceVersionLoaded();
 
   const nodeEnv = process.env.NODE_ENV ?? "production";
   app.set("env", nodeEnv);
 
-  const corsOrigin = process.env.CORS_ORIGIN ?? "*";
+  const corsOrigin = process.env.CORS_ORIGIN;
   const corsMiddleware = await createCorsMiddleware(corsOrigin);
   app.use(corsMiddleware);
 

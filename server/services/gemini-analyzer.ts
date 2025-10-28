@@ -6,12 +6,12 @@ import {
   ChecklistItemStatus,
   ObjectionHandling,
 } from "../shared/schema.js";
+import { executeGeminiRequest, getGeminiClient, GeminiServiceError } from "./gemini-client.js";
 
 // DON'T DELETE THIS COMMENT
 // Follow these instructions when using this blueprint:
-// - Note that the newest Gemini model series is "gemini-2.5-flash" or gemini-2.5-pro"
+// - Note that the newest Gemini model series is "gemini-2.5-flash" or "gemini-2.5-pro"
 //   - do not change this unless explicitly requested by the user
-
 // This API key is from Gemini Developer API Key, not vertex AI API Key
 const geminiClient = getGeminiClient();
 
@@ -27,20 +27,18 @@ export async function analyzeConversation(
   language: string = "ru"
 ): Promise<AnalysisResult> {
   try {
-    // Step 1: Analyze checklist items
     const checklistResult = await analyzeChecklist(transcript, checklist, source, language);
-
-    // Step 2: Analyze objections and content
     const objectionsResult = await analyzeObjections(transcript, language);
-
-    return {
-      checklistReport: checklistResult,
-      objectionsReport: objectionsResult,
-    };
+    return { checklistReport: checklistResult, objectionsReport: objectionsResult };
   } catch (error) {
-    console.error("Gemini analysis error:", error);
-    throw new Error(
-      `Ошибка анализа диалога: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`
+    if (error instanceof GeminiServiceError) throw error;
+    const message = error instanceof Error ? error.message : "Неизвестная ошибка";
+    console.error("Gemini analysis error:", message);
+    throw new GeminiServiceError(
+      `Ошибка анализа диалога: ${message}`,
+      502,
+      "gemini_analysis_failed",
+      error instanceof Error ? { cause: error } : undefined,
     );
   }
 }
@@ -76,7 +74,7 @@ async function analyzeChecklist(
     threshold: item.confidence_threshold,
   }));
 
-  const userPrompt = `Диалог для анализа:
+  const contents = `Диалог для анализа:
 """
 ${transcript}
 """
@@ -138,29 +136,26 @@ ${JSON.stringify(checklistItems, null, 2)}
   });
 
   const rawJson = response.text;
-  
-  if (!rawJson) {
-    throw new Error("Gemini returned empty response");
-  }
+  if (!rawJson) throw new GeminiServiceError("Gemini вернул пустой ответ", 502, "gemini_empty_response");
 
   let analysisData: any;
   try {
     analysisData = JSON.parse(rawJson);
   } catch (parseError) {
-    console.error("Failed to parse Gemini response:", rawJson);
-    throw new Error("Не удалось обработать ответ от AI. Попробуйте снова.");
+    throw new GeminiServiceError(
+      "Не удалось обработать ответ от AI. Попробуйте снова.",
+      502,
+      "gemini_parse_error",
+      parseError instanceof Error ? { cause: parseError } : undefined,
+    );
   }
 
-  // Validate response structure
   if (!analysisData.items || !Array.isArray(analysisData.items)) {
-    console.error("Invalid Gemini response structure:", analysisData);
-    throw new Error("AI вернул некорректный формат данных");
+    throw new GeminiServiceError("AI вернул некорректный формат данных", 502, "gemini_invalid_schema");
   }
 
-  // Build checklist report with fallbacks
   const reportItems = checklist.items.map((item) => {
     const analyzed = analysisData.items.find((a: any) => a.id === item.id);
-    
     return {
       id: item.id,
       title: item.title,
@@ -168,7 +163,7 @@ ${JSON.stringify(checklistItems, null, 2)}
       status: (analyzed?.status || "uncertain") as ChecklistItemStatus,
       score: typeof analyzed?.score === "number" ? analyzed.score : 0,
       evidence: Array.isArray(analyzed?.evidence) ? analyzed.evidence : [],
-      comment: analyzed?.comment,
+      comment: analyzed?.comment
     };
   });
 
@@ -178,10 +173,10 @@ ${JSON.stringify(checklistItems, null, 2)}
       language,
       analyzed_at: new Date().toISOString(),
       duration: undefined,
-      volume: transcript.length,
+      volume: transcript.length
     },
     items: reportItems,
-    summary: analysisData.summary || "Анализ завершён",
+    summary: analysisData.summary || "Анализ завершён"
   };
 }
 
@@ -203,7 +198,7 @@ async function analyzeObjections(
 
 Отвечай ТОЛЬКО валидным JSON без дополнительного текста.`;
 
-  const userPrompt = `Диалог для анализа:
+  const contents = `Диалог для анализа:
 """
 ${transcript}
 """
@@ -258,32 +253,38 @@ ${transcript}
   });
 
   const rawJson = response.text;
-  
   if (!rawJson) {
-    throw new Error("Gemini returned empty response for objections analysis");
+    throw new GeminiServiceError(
+      "Gemini вернул пустой ответ для анализа возражений",
+      502,
+      "gemini_empty_objections_response",
+    );
   }
 
   let data: any;
   try {
     data = JSON.parse(rawJson);
   } catch (parseError) {
-    console.error("Failed to parse Gemini objections response:", rawJson);
-    throw new Error("Не удалось обработать ответ от AI при анализе возражений");
+    throw new GeminiServiceError(
+      "Не удалось обработать ответ от AI при анализе возражений",
+      502,
+      "gemini_objections_parse_error",
+      parseError instanceof Error ? { cause: parseError } : undefined,
+    );
   }
 
-  // Validate and provide fallbacks
   return {
     topics: Array.isArray(data.topics) ? data.topics : [],
-    objections: Array.isArray(data.objections) 
+    objections: Array.isArray(data.objections)
       ? data.objections.map((obj: any) => ({
           category: obj.category || "Прочее",
           client_phrase: obj.client_phrase || "",
           manager_reply: obj.manager_reply || undefined,
           handling: (obj.handling || "unhandled") as ObjectionHandling,
-          advice: obj.advice || undefined,
+          advice: obj.advice || undefined
         }))
       : [],
     conversation_essence: data.conversation_essence || "Не удалось определить суть разговора",
-    outcome: data.outcome || "Итог не зафиксирован",
+    outcome: data.outcome || "Итог не зафиксирован"
   };
 }

@@ -10,24 +10,19 @@ export interface TranscriptionResult {
   text: string;
   language?: string;
   duration?: number;
-  segments?: Array<{
-    start: number;
-    end: number;
-    text: string;
-  }>;
+  segments?: Array<{ start: number; end: number; text: string }>;
 }
 
-// Helper to get MIME type from file extension
 function getMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
-  const mimeTypes: { [key: string]: string } = {
+  const mimeTypes: Record<string, string> = {
     ".mp3": "audio/mp3",
     ".wav": "audio/wav",
     ".m4a": "audio/m4a",
     ".flac": "audio/flac",
     ".ogg": "audio/ogg",
     ".webm": "audio/webm",
-    ".opus": "audio/opus",
+    ".opus": "audio/opus"
   };
   return mimeTypes[ext] || "audio/mpeg";
 }
@@ -37,7 +32,6 @@ export async function transcribeAudio(
   language?: string
 ): Promise<TranscriptionResult> {
   try {
-    // Read audio file
     const audioBytes = fs.readFileSync(audioFilePath);
     const mimeType = getMimeType(audioFilePath);
 
@@ -70,28 +64,45 @@ If multiple speakers are audible, indicate them as "Manager:" and "Client:" or "
       ],
     });
 
-    // Extract text from Gemini response (same as in gemini-analyzer.ts)
-    const transcriptionText = response.text;
+    const client = getGeminiClient();
+    const response = await executeGeminiRequest(() =>
+      client.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inlineData: { data: audioBytes.toString("base64"), mimeType } },
+              { text: prompt }
+            ]
+          }
+        ]
+      })
+    );
 
-    if (!transcriptionText || transcriptionText.trim().length === 0) {
-      console.error("Gemini response:", JSON.stringify(response, null, 2));
-      throw new Error("Gemini не вернул расшифровку. Проверьте формат аудио и API ключ.");
+    const transcriptionText = response.text;
+    if (!transcriptionText || !transcriptionText.trim()) {
+      throw new GeminiServiceError(
+        "Gemini не вернул расшифровку. Проверьте формат аудио и API ключ.",
+        502,
+        "gemini_empty_transcription"
+      );
     }
 
-    const result: TranscriptionResult = {
+    return {
       text: transcriptionText.trim(),
       language: language || "ru",
-      // Note: Gemini doesn't return duration and segments like Whisper
-      // These fields are optional and not critical for dialogue analysis
       duration: undefined,
-      segments: undefined,
+      segments: undefined
     };
-
-    return result;
   } catch (error) {
-    console.error("Gemini transcription error:", error);
-    throw new Error(
-      `Ошибка транскрипции аудио: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`
+    if (error instanceof GeminiServiceError) throw error;
+    const message = error instanceof Error ? error.message : "Неизвестная ошибка";
+    throw new GeminiServiceError(
+      `Ошибка транскрипции аудио: ${message}`,
+      502,
+      "gemini_transcription_failed",
+      error instanceof Error ? { cause: error } : undefined
     );
   }
 }

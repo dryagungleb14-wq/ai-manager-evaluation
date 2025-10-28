@@ -4,6 +4,12 @@ This document describes how to build and run the backend located in [`server/`](
 
 ## Project layout
 
+## Deploy
+
+- Railway использует `nixpacks.toml` с публичным npm mirror (`https://registry.npmmirror.com`).
+- Локальная проверка сервера: `npm run build:server && npm start`.
+- Фронтенд собирается отдельно: `npm run build`.
+
 - **Root directory:** `server/`
 - **Entry point:** `index.ts`
 - **Build output:** `dist/index.js`
@@ -17,18 +23,39 @@ Create a `.env` file inside `server/` (Railway automatically injects variables a
 | `PORT` | HTTP port used by Express. Railway injects `PORT` automatically, default is `3000` for local runs. |
 | `CORS_ORIGIN` | Comma-separated list of allowed origins. Use `*` to allow all or set to your deployed frontend URL (e.g. `https://<frontend-on-vercel>.vercel.app`). |
 | `DATABASE_URL` | PostgreSQL connection string. Railway sets this automatically when the Neon plugin is attached. Without it the API falls back to an in-memory store that is not suitable for production. |
+| `GEMINI_API_KEY` | API key from Google AI Studio used by the analyzer and transcription helpers. Required for smoke tests and production traffic. |
 
 > ℹ️  To keep builds working without direct npm registry access, lightweight drop-in replacements of `cors` and `dotenv` live in [`server/vendor/`](server/vendor/). They expose the same public API that the standard packages provide, so no additional configuration is required when deploying to Railway.
 
 ## Railway deployment settings
 
-Configure the Railway service to deploy from the `server/` directory with the following commands:
+Railway автоматически использует `nixpacks.toml`, поэтому переопределять команды не требуется. Фазы выполняют:
 
-- **Install:** `npm ci`
-- **Build:** `npm run build`
-- **Start:** `npm run start`
+- **Install:** mirror-реестр + `npm ci --omit=dev --no-audit --no-fund`
+- **Build:** `npm run build:server`
+- **Start:** `npm start`
 
-These commands build the TypeScript sources into `dist/` and launch the compiled JavaScript with source maps enabled. Ensure that the root directory for the service is set to `server/` so that Railway uses the correct `package.json`.
+Убедитесь, что сервис привязан к корню репозитория, чтобы Nixpacks нашёл конфиг и собрал `dist/index.js`.
+
+## Smoke-тесты после деплоя
+
+После успешной сборки на Railway выполните быстрые проверки напрямую в запущенном окружении:
+
+1. **Переменные окружения.** В разделе Railway → *Settings → Variables* убедитесь, что указан рабочий `GEMINI_API_KEY` из Google AI Studio. При необходимости обновите ключ до актуального продакшн-значения и перезапустите деплой.
+2. **Health-check.** Вызовите `GET https://<your-service>.up.railway.app/health` и убедитесь, что ответ имеет статус `200` и тело вида `{ "status": "ok" }`.
+3. **Аналитика диалога.** Отправьте `POST /analyze` с тестовым транскриптом. Пример payload:
+   ```json
+   {
+     "transcript": "Менеджер: Добрый день!\nКлиент: Здравствуйте!",
+     "checklist": { "items": [] },
+     "source": "call",
+     "language": "ru"
+   }
+   ```
+   Ответ должен содержать JSON с полями `checklistReport` и `objectionsReport` без ошибок `GeminiServiceError` в логах.
+4. **Транскрибация.** Отправьте `POST /transcribe` с коротким `.wav` или `.mp3` файлом (≤5 секунд). Ожидается успешный JSON c полем `text`.
+
+Во время smoke-тестов контролируйте логи Railway: успешный прогон не должен содержать сообщений `GeminiServiceError`. После завершения тестов можно создать тег релиза, например `git tag v1.0.0 && git push origin v1.0.0`, чтобы зафиксировать состояние продакшн-окружения.
 
 ## Local verification before deploying
 
