@@ -12,7 +12,6 @@ import { executeGeminiRequest, getGeminiClient, GeminiServiceError } from "./gem
 // - Note that the newest Gemini model series is "gemini-2.5-flash" or "gemini-2.5-pro"
 //   - do not change this unless explicitly requested by the user
 // This API key is from Gemini Developer API Key, not vertex AI API Key
-const geminiClient = getGeminiClient();
 
 interface AnalysisResult {
   checklistReport: ChecklistReport;
@@ -95,6 +94,7 @@ ${JSON.stringify(checklistItems, null, 2)}
   "summary": "Краткая общая сводка выполнения чек-листа (2-3 предложения)"
 }`;
 
+  const geminiClient = getGeminiClient();
   const response = await executeGeminiRequest(() =>
     geminiClient.generateContent({
       model: "gemini-2.5-flash",
@@ -222,6 +222,7 @@ ${transcript}
   "outcome": "Итог: что договорились, следующие шаги"
 }`;
 
+  const geminiClient = getGeminiClient();
   const response = await executeGeminiRequest(() =>
     geminiClient.generateContent({
       model: "gemini-2.5-flash",

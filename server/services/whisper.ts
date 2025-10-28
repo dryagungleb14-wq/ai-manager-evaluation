@@ -1,12 +1,9 @@
 import fs from "fs";
 import path from "path";
-import { GeminiServiceError } from "./gemini-client.js";
-import { getGeminiClient } from "../lib/gemini-client.js";
+import { GeminiServiceError, getGeminiClient } from "./gemini-client.js";
 
 // Using Gemini 2.5 Flash for audio transcription (FREE alternative to OpenAI Whisper)
 // Gemini supports: audio/mp3, audio/wav, audio/m4a, audio/flac, audio/ogg, etc.
-const geminiClient = getGeminiClient();
-
 export interface TranscriptionResult {
   text: string;
   language?: string;
@@ -45,6 +42,7 @@ If multiple speakers are audible, indicate them as "Manager:" and "Client:" or "
       prompt = `Transcribe this audio in ${language} language. ${prompt}`;
     }
     // Call Gemini with audio
+    const geminiClient = getGeminiClient();
     const response = await geminiClient.generateContent({
       model: "gemini-2.5-flash",
       contents: [
