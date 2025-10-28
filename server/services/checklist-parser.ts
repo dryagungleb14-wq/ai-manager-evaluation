@@ -84,10 +84,19 @@ function normalizeChecklist(raw: ChecklistLike): Checklist {
     throw new Error("Checklist JSON must contain items[]");
   }
 
-  const items = raw.items.map((item) => {
+  const items = raw.items.map((item, index) => {
     const candidate = item as ChecklistItemLike;
     if (!candidate.id || !candidate.title) {
       throw new Error("Checklist item must have id and title");
+    }
+
+    const id = String(candidate.id).trim();
+    const title = String(candidate.title).trim();
+    if (!id) {
+      throw new Error(`Checklist item at index ${index} has empty id after normalization`);
+    }
+    if (!title) {
+      throw new Error(`Checklist item ${id} has empty title after normalization`);
     }
 
     const criteria = candidate.criteria ?? {};
@@ -99,14 +108,14 @@ function normalizeChecklist(raw: ChecklistLike): Checklist {
     const negativePatterns = normalizePatterns(criteria.negative_patterns);
 
     const normalizedCriteria: Checklist["items"][number]["criteria"] = {
-      llm_hint: rawHint ?? "",
+      llm_hint: rawHint ?? title,
       ...(positivePatterns ? { positive_patterns: positivePatterns } : {}),
       ...(negativePatterns ? { negative_patterns: negativePatterns } : {}),
     };
 
     return {
-      id: String(candidate.id),
-      title: String(candidate.title),
+      id,
+      title,
       type: normalizeType(candidate.type),
       criteria: normalizedCriteria,
       confidence_threshold: normalizeConfidenceThreshold(candidate.confidence_threshold),
