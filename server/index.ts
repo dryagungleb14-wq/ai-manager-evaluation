@@ -19,6 +19,8 @@ const DEFAULT_ALLOWED_ORIGINS: OriginMatcher[] = [
   /^https:\/\/([a-z0-9-]+-)*[a-z0-9-]+\.vercel\.app$/i,
 ];
 
+let corsFactoryPromise: Promise<(options?: CorsOptions) => RequestHandler> | null = null;
+
 let serviceVersion =
   process.env.APP_VERSION?.trim()
     ?? process.env.npm_package_version?.trim()
@@ -106,6 +108,25 @@ function originMatches(origin: string, matchers: OriginMatcher[]): boolean {
   });
 }
 
+async function loadCorsFactory(): Promise<(options?: CorsOptions) => RequestHandler> {
+  if (!corsFactoryPromise) {
+    corsFactoryPromise = (async () => {
+      const corsModule = await import("cors");
+      const factory = (corsModule as { default?: (options?: CorsOptions) => RequestHandler }).default
+        ?? (corsModule as unknown as (options?: CorsOptions) => RequestHandler);
+
+      return factory;
+    })();
+  }
+
+  try {
+    return await corsFactoryPromise;
+  } catch (error) {
+    corsFactoryPromise = null;
+    throw error;
+  }
+}
+
 function buildFallbackCorsMiddleware(matchers: OriginMatcher[], allowAll: boolean): RequestHandler {
   return (req, res, next) => {
     const requestOrigin = req.headers.origin;
@@ -153,19 +174,23 @@ async function createCorsMiddleware(originSetting: string | undefined): Promise<
   const { allowAll, matchers } = buildOriginConfig(originSetting);
 
   try {
-    const corsModule = await import("cors");
-    const corsFactory = (corsModule as { default?: (options?: CorsOptions) => RequestHandler }).default
-      ?? (corsModule as unknown as (options?: CorsOptions) => RequestHandler);
+    const corsFactory = await loadCorsFactory();
+    const baseOptions: CorsOptions = {
+      credentials: true,
+      methods: ["GET", "POST", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+      optionsSuccessStatus: 204,
+    };
 
     if (allowAll) {
       return corsFactory({
-        methods: ["GET", "POST", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization"],
-        credentials: true,
+        ...baseOptions,
+        origin: true,
       });
     }
 
     return corsFactory({
+      ...baseOptions,
       origin(origin, callback) {
         if (!origin) {
           callback(null, true);
@@ -179,9 +204,6 @@ async function createCorsMiddleware(originSetting: string | undefined): Promise<
 
         callback(new Error("Not allowed by CORS"));
       },
-      credentials: true,
-      methods: ["GET", "POST", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
     });
   } catch (error) {
     log(

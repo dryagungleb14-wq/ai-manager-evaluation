@@ -4,7 +4,7 @@ nixPkgs = ["nodejs_20"]
 [phases.install]
 cmds = [
   "npm config set registry https://registry.npmmirror.com",
-  "npm ci --omit=dev --no-audit --no-fund"
+  "npm install --omit=dev --no-audit --no-fund"
 ]
 
 [phases.build]

@@ -2,7 +2,7 @@ import type { RequestHandler } from "express";
 
 type OriginFunction = (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => void;
 
-type OriginSetting = string | RegExp | Array<string | RegExp> | OriginFunction;
+type OriginSetting = string | RegExp | Array<string | RegExp> | OriginFunction | boolean;
 
 export interface CorsOptions {
   origin?: OriginSetting;
