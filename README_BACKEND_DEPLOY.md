@@ -25,13 +25,13 @@ Create a `.env` file inside `server/` (Railway automatically injects variables a
 | `DATABASE_URL` | PostgreSQL connection string. Railway sets this automatically when the Neon plugin is attached. Without it the API falls back to an in-memory store that is not suitable for production. |
 | `GEMINI_API_KEY` | API key from Google AI Studio used by the analyzer and transcription helpers. Required for smoke tests and production traffic. |
 
-> ℹ️  To keep builds working without direct npm registry access, lightweight drop-in replacements of `cors` and `dotenv` live in [`server/vendor/`](server/vendor/). They expose the same public API that the standard packages provide, so no additional configuration is required when deploying to Railway.
+> ℹ️  Railway теперь устанавливает официальные пакеты `cors` и `better-sqlite3` во время production-сборки. Локальные заглушки в [`server/vendor/`](server/vendor/) оставлены для офлайн-разработки, но в продакшене их заменяет полноценная версия из npm.
 
 ## Railway deployment settings
 
 Railway автоматически использует `nixpacks.toml`, поэтому переопределять команды не требуется. Фазы выполняют:
 
-- **Install:** mirror-реестр + `npm ci --omit=dev --no-audit --no-fund`
+- **Install:** mirror-реестр + `npm ci --omit=dev --include=optional --no-audit --no-fund`
 - **Build:** `npm run build:server`
 - **Start:** `npm start`
 
