@@ -122,13 +122,15 @@ function normalizeChecklist(raw: ChecklistLike): Checklist {
     };
   });
 
-  const checklistId = typeof raw.id === "string" && raw.id.trim().length > 0 ? raw.id : randomUUID();
-  const checklistName = typeof raw.name === "string" && raw.name.trim().length > 0
-    ? raw.name
-    : typeof raw.title === "string" && raw.title.trim().length > 0
-      ? raw.title
-      : "Checklist";
-  const checklistVersion = typeof raw.version === "string" && raw.version.trim().length > 0 ? raw.version : "1.0";
+  const checklistIdCandidate = typeof raw.id === "string" ? raw.id.trim() : "";
+  const checklistId = checklistIdCandidate.length > 0 ? checklistIdCandidate : randomUUID();
+
+  const nameCandidate = typeof raw.name === "string" ? raw.name.trim() : "";
+  const titleCandidate = typeof raw.title === "string" ? raw.title.trim() : "";
+  const checklistName = nameCandidate || titleCandidate || "Checklist";
+
+  const versionCandidate = typeof raw.version === "string" ? raw.version.trim() : "";
+  const checklistVersion = versionCandidate || "1.0";
 
   return {
     id: checklistId,
@@ -219,8 +221,12 @@ ${content}
     ...parsed,
     name:
       typeof parsed.name === "string" && parsed.name.trim().length > 0
-        ? parsed.name
+        ? parsed.name.trim()
         : fallbackName || "Checklist",
+    version:
+      typeof parsed.version === "string" && parsed.version.trim().length > 0
+        ? parsed.version.trim()
+        : undefined,
     items: Array.isArray(parsed.items)
       ? parsed.items.map((item, index) => ({
           id: (item as ChecklistItemLike)?.id ?? `item-${index + 1}`,
