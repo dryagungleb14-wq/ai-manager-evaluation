@@ -1,3 +1,4 @@
+import { getGeminiClient } from "../lib/gemini-client.js";
 import {
   Checklist,
   ChecklistReport,
@@ -12,6 +13,7 @@ import { executeGeminiRequest, getGeminiClient, GeminiServiceError } from "./gem
 // - Note that the newest Gemini model series is "gemini-2.5-flash" or "gemini-2.5-pro"
 //   - do not change this unless explicitly requested by the user
 // This API key is from Gemini Developer API Key, not vertex AI API Key
+const geminiClient = getGeminiClient();
 
 interface AnalysisResult {
   checklistReport: ChecklistReport;
@@ -94,49 +96,44 @@ ${JSON.stringify(checklistItems, null, 2)}
   "summary": "Краткая общая сводка выполнения чек-листа (2-3 предложения)"
 }`;
 
-  const client = getGeminiClient();
-  const response = await executeGeminiRequest(() =>
-    client.models.generateContent({
-      model: "gemini-2.5-flash",
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "object",
-          properties: {
-            items: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  id: { type: "string" },
-                  status: { type: "string" },
-                  score: { type: "number" },
-                  evidence: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        text: { type: "string" },
-                        start: { type: "number" },
-                        end: { type: "number" }
-                      },
-                      required: ["text"]
-                    }
+  const response = await geminiClient.generateContent({
+    model: "gemini-2.5-flash",
+    systemInstruction: systemPrompt,
+    responseMimeType: "application/json",
+    responseSchema: {
+      type: "object",
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              status: { type: "string" },
+              score: { type: "number" },
+              evidence: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    text: { type: "string" },
+                    start: { type: "number" },
+                    end: { type: "number" },
                   },
-                  comment: { type: "string" }
+                  required: ["text"],
                 },
-                required: ["id", "status", "score", "evidence"]
-              }
+              },
+              comment: { type: "string" },
             },
-            summary: { type: "string" }
+            required: ["id", "status", "score", "evidence"],
           },
-          required: ["items", "summary"]
-        }
+        },
+        summary: { type: "string" },
       },
-      contents
-    })
-  );
+      required: ["items", "summary"],
+    },
+    contents: userPrompt,
+  });
 
   const rawJson = response.text;
   if (!rawJson) throw new GeminiServiceError("Gemini вернул пустой ответ", 502, "gemini_empty_response");
@@ -222,40 +219,38 @@ ${transcript}
   "outcome": "Итог: что договорились, следующие шаги"
 }`;
 
-  const client = getGeminiClient();
-  const response = await executeGeminiRequest(() =>
-    client.models.generateContent({
-      model: "gemini-2.5-flash",
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "object",
-          properties: {
-            topics: { type: "array", items: { type: "string" } },
-            objections: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  category: { type: "string" },
-                  client_phrase: { type: "string" },
-                  manager_reply: { type: "string" },
-                  handling: { type: "string" },
-                  advice: { type: "string" }
-                },
-                required: ["category", "client_phrase", "handling"]
-              }
+  const response = await geminiClient.generateContent({
+    model: "gemini-2.5-flash",
+    systemInstruction: systemPrompt,
+    responseMimeType: "application/json",
+    responseSchema: {
+      type: "object",
+      properties: {
+        topics: {
+          type: "array",
+          items: { type: "string" },
+        },
+        objections: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              category: { type: "string" },
+              client_phrase: { type: "string" },
+              manager_reply: { type: "string" },
+              handling: { type: "string" },
+              advice: { type: "string" },
             },
-            conversation_essence: { type: "string" },
-            outcome: { type: "string" }
+            required: ["category", "client_phrase", "handling"],
           },
-          required: ["topics", "objections", "conversation_essence", "outcome"]
-        }
+        },
+        conversation_essence: { type: "string" },
+        outcome: { type: "string" },
       },
-      contents
-    })
-  );
+      required: ["topics", "objections", "conversation_essence", "outcome"],
+    },
+    contents: userPrompt,
+  });
 
   const rawJson = response.text;
   if (!rawJson) {

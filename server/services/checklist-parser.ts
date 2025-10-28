@@ -1,4 +1,6 @@
-import path from "node:path";
+import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
+import { getGeminiClient } from "../lib/gemini-client.js";
 import { randomUUID } from "node:crypto";
 import type { Request } from "express";
 import Papa from "papaparse";
@@ -122,34 +124,9 @@ function normalizeChecklist(raw: ChecklistLike): Checklist {
     };
   });
 
-  const checklistIdCandidate = typeof raw.id === "string" ? raw.id.trim() : "";
-  const checklistId = checklistIdCandidate.length > 0 ? checklistIdCandidate : randomUUID();
-
-  const nameCandidate = typeof raw.name === "string" ? raw.name.trim() : "";
-  const titleCandidate = typeof raw.title === "string" ? raw.title.trim() : "";
-  const checklistName = nameCandidate || titleCandidate || "Checklist";
-
-  const versionCandidate = typeof raw.version === "string" ? raw.version.trim() : "";
-  const checklistVersion = versionCandidate || "1.0";
-
-  return {
-    id: checklistId,
-    name: checklistName,
-    version: checklistVersion,
-    items,
-  };
-}
-
-/**
- * Универсальный парсер чек-листа.
- * Принимает строку/буфер/Express upload/объект и возвращает Checklist.
- */
-async function parseTextWithAI(content: string, filename: string): Promise<Checklist> {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error(
-      "GEMINI_API_KEY не настроен. Для парсинга TXT/MD файлов требуется Gemini API. Используйте CSV или Excel формат, или настройте API ключ.",
-    );
-  }
+  try {
+    // Lazy initialization of Gemini client
+    const geminiClient = getGeminiClient();
 
   const prompt = `Ты эксперт по анализу чек-листов для оценки работы менеджеров.
 
@@ -186,17 +163,32 @@ ${content}
 
 Верни ТОЛЬКО валидный JSON без дополнительных комментариев.`;
 
-  const client = getGeminiClient();
-  const response = await executeGeminiRequest(() =>
-    client.models.generateContent({
+    const result = await geminiClient.generateContent({
       model: "gemini-2.0-flash-exp",
-      config: {
-        responseMimeType: "application/json",
-      },
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: prompt }],
+      contents: prompt,
+      responseMimeType: "application/json",
+    });
+
+    const responseText = result.text ?? "";
+    if (!responseText) {
+      throw new Error("Пустой ответ от Gemini API");
+    }
+    
+    const parsed = JSON.parse(responseText);
+    
+    // Добавляем ID и дефолтные значения
+    const checklist: Checklist = {
+      id: randomUUID(),
+      name: parsed.name || filename.replace(/\.(txt|md)$/i, ''),
+      version: "1.0",
+      items: parsed.items.map((item: any, index: number) => ({
+        id: `item-${index + 1}`,
+        title: item.title,
+        type: item.type,
+        criteria: {
+          llm_hint: item.criteria.llm_hint,
+          positive_patterns: item.criteria.positive_patterns || [],
+          negative_patterns: item.criteria.negative_patterns || [],
         },
       ],
     }),
