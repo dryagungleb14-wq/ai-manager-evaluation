@@ -3,11 +3,13 @@
 import * as React from "react"
 import type {
   LegendProps,
-  NameType,
   ResponsiveContainerProps,
   TooltipProps,
-  ValueType,
 } from "recharts"
+import type {
+  NameType,
+  ValueType,
+} from "recharts/types/component/DefaultTooltipContent"
 
 import { cn } from "@/lib/utils"
 
@@ -339,20 +341,24 @@ const ChartLegendContent = React.forwardRef<
 )
 ChartLegendContent.displayName = "ChartLegend"
 
-const ChartTooltip: React.FC<TooltipProps<ValueType, NameType>> = (
-  props
-) => (
-  <React.Suspense fallback={null}>
-    <LazyTooltip {...props} />
-  </React.Suspense>
-)
+function ChartTooltip(props: TooltipProps<ValueType, NameType>) {
+  return (
+    <React.Suspense fallback={null}>
+      <LazyTooltip {...props} />
+    </React.Suspense>
+  )
+}
 ChartTooltip.displayName = "ChartTooltip"
 
-const ChartLegend: React.FC<LegendProps> = (props) => (
-  <React.Suspense fallback={null}>
-    <LazyLegend {...props} />
-  </React.Suspense>
-)
+type ChartLegendProps = Omit<LegendProps, "ref">
+
+function ChartLegend(props: ChartLegendProps) {
+  return (
+    <React.Suspense fallback={null}>
+      <LazyLegend {...props} />
+    </React.Suspense>
+  )
+}
 ChartLegend.displayName = "ChartLegend"
 
 // Helper to extract item config from a payload.
