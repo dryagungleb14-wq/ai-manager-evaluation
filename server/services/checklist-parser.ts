@@ -1,6 +1,4 @@
-import * as XLSX from 'xlsx';
-import Papa from 'papaparse';
-import { getGeminiClient } from "../lib/gemini-client.js";
+import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Request } from "express";
 import Papa from "papaparse";
@@ -88,17 +86,15 @@ function normalizeChecklist(raw: ChecklistLike): Checklist {
 
   const items = raw.items.map((item, index) => {
     const candidate = item as ChecklistItemLike;
-    if (!candidate.id || !candidate.title) {
-      throw new Error("Checklist item must have id and title");
-    }
+    const idCandidate = typeof candidate.id === "string" ? candidate.id.trim() : `item-${index + 1}`;
+    const titleCandidate = typeof candidate.title === "string" ? candidate.title.trim() : "";
 
-    const id = String(candidate.id).trim();
-    const title = String(candidate.title).trim();
-    if (!id) {
+    if (!idCandidate) {
       throw new Error(`Checklist item at index ${index} has empty id after normalization`);
     }
-    if (!title) {
-      throw new Error(`Checklist item ${id} has empty title after normalization`);
+
+    if (!titleCandidate) {
+      throw new Error(`Checklist item ${idCandidate} has empty title after normalization`);
     }
 
     const criteria = candidate.criteria ?? {};
@@ -110,23 +106,34 @@ function normalizeChecklist(raw: ChecklistLike): Checklist {
     const negativePatterns = normalizePatterns(criteria.negative_patterns);
 
     const normalizedCriteria: Checklist["items"][number]["criteria"] = {
-      llm_hint: rawHint ?? title,
+      llm_hint: rawHint ?? titleCandidate,
       ...(positivePatterns ? { positive_patterns: positivePatterns } : {}),
       ...(negativePatterns ? { negative_patterns: negativePatterns } : {}),
     };
 
     return {
-      id,
-      title,
+      id: idCandidate,
+      title: titleCandidate,
       type: normalizeType(candidate.type),
       criteria: normalizedCriteria,
       confidence_threshold: normalizeConfidenceThreshold(candidate.confidence_threshold),
     };
   });
 
-  try {
-    // Lazy initialization of Gemini client
-    const geminiClient = getGeminiClient();
+  const nameCandidate = typeof raw.name === "string" ? raw.name.trim() : "";
+  const versionCandidate = typeof raw.version === "string" ? raw.version.trim() : "";
+  const idCandidate = typeof raw.id === "string" ? raw.id.trim() : "";
+
+  return {
+    id: idCandidate || randomUUID(),
+    name: nameCandidate || "Checklist",
+    version: versionCandidate || "1.0",
+    items,
+  };
+}
+
+async function parseTextWithAI(content: string, filename: string): Promise<Checklist> {
+  const geminiClient = getGeminiClient();
 
   const prompt = `Ты эксперт по анализу чек-листов для оценки работы менеджеров.
 
@@ -163,34 +170,16 @@ ${content}
 
 Верни ТОЛЬКО валидный JSON без дополнительных комментариев.`;
 
-    const result = await geminiClient.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
-      responseMimeType: "application/json",
-    });
-
-    const responseText = result.text ?? "";
-    if (!responseText) {
-      throw new Error("Пустой ответ от Gemini API");
-    }
-    
-    const parsed = JSON.parse(responseText);
-    
-    // Добавляем ID и дефолтные значения
-    const checklist: Checklist = {
-      id: randomUUID(),
-      name: parsed.name || filename.replace(/\.(txt|md)$/i, ''),
-      version: "1.0",
-      items: parsed.items.map((item: any, index: number) => ({
-        id: `item-${index + 1}`,
-        title: item.title,
-        type: item.type,
-        criteria: {
-          llm_hint: item.criteria.llm_hint,
-          positive_patterns: item.criteria.positive_patterns || [],
-          negative_patterns: item.criteria.negative_patterns || [],
+  const response = await executeGeminiRequest(() =>
+    geminiClient.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: prompt }],
         },
       ],
+      config: { responseMimeType: "application/json" },
     }),
   );
 
@@ -218,14 +207,15 @@ ${content}
     version:
       typeof parsed.version === "string" && parsed.version.trim().length > 0
         ? parsed.version.trim()
-        : undefined,
+        : "1.0",
     items: Array.isArray(parsed.items)
       ? parsed.items.map((item, index) => ({
           id: (item as ChecklistItemLike)?.id ?? `item-${index + 1}`,
           title: (item as ChecklistItemLike)?.title,
           type: (item as ChecklistItemLike)?.type,
           criteria: (item as ChecklistItemLike)?.criteria,
-          confidence_threshold: (item as ChecklistItemLike)?.confidence_threshold ?? DEFAULT_CONFIDENCE_THRESHOLD,
+          confidence_threshold:
+            (item as ChecklistItemLike)?.confidence_threshold ?? DEFAULT_CONFIDENCE_THRESHOLD,
         }))
       : [],
   };
