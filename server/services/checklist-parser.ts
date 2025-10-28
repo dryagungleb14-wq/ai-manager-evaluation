@@ -237,37 +237,37 @@ function parseCSV(content: string, filename: string): Checklist {
   }
 
   const items = result.data.reduce<ChecklistItemLike[]>((acc, row, index) => {
-    const title =
+    const rawTitle =
       (row["Пункт"] as string) ||
       (row["Название"] as string) ||
       (row["Title"] as string) ||
       (row["Item"] as string) ||
       (row["пункт"] as string) ||
       "";
+    const title = typeof rawTitle === "string" ? rawTitle.trim() : "";
 
-    if (!title || typeof title !== "string") {
+    if (!title) {
       return acc;
     }
 
     const typeRaw =
-      (row["Тип"] as string) ||
-      (row["Type"] as string) ||
-      (row["тип"] as string) ||
+      ((row["Тип"] as string) || row["Type"] || row["тип"])?.toString().trim() ||
       "mandatory";
 
-    const hint =
+    const rawHint =
       (row["Описание"] as string) ||
       (row["Description"] as string) ||
       (row["LLM Hint"] as string) ||
       (row["описание"] as string) ||
-      title;
+      "";
+    const hint = rawHint ? rawHint.toString().trim() : "";
 
     acc.push({
       id: `item-${index + 1}`,
       title,
       type: typeRaw,
       criteria: {
-        llm_hint: hint,
+        llm_hint: hint || title,
         positive_patterns: [],
         negative_patterns: [],
       },
@@ -292,34 +292,33 @@ function parseExcel(buffer: Buffer, filename: string): Checklist {
   const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet);
 
   const items = data.reduce<ChecklistItemLike[]>((acc, row, index) => {
-    const title =
+    const rawTitle =
       (row["Пункт"] as string) ||
       (row["Название"] as string) ||
       (row["Title"] as string) ||
       (row["Item"] as string) ||
       "";
+    const title = typeof rawTitle === "string" ? rawTitle.trim() : "";
 
-    if (!title || typeof title !== "string") {
+    if (!title) {
       return acc;
     }
 
-    const typeRaw =
-      (row["Тип"] as string) ||
-      (row["Type"] as string) ||
-      "mandatory";
+    const typeRaw = ((row["Тип"] as string) || row["Type"])?.toString().trim() || "mandatory";
 
-    const hint =
+    const rawHint =
       (row["Описание"] as string) ||
       (row["Description"] as string) ||
       (row["LLM Hint"] as string) ||
-      title;
+      "";
+    const hint = rawHint ? rawHint.toString().trim() : "";
 
     acc.push({
       id: `item-${index + 1}`,
       title,
       type: typeRaw,
       criteria: {
-        llm_hint: hint,
+        llm_hint: hint || title,
         positive_patterns: [],
         negative_patterns: [],
       },
