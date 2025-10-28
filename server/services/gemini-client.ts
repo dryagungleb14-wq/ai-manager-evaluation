@@ -169,17 +169,30 @@ class GeminiClient {
   constructor(apiKey: string) {
     this.models = new GeminiModelsClient(apiKey);
   }
+
+  generateContent(request: GeminiGenerateContentRequest): Promise<GeminiContentResponse> {
+    return this.models.generateContent(request);
+  }
 }
+
+type GeminiErrorOptions = {
+  cause?: unknown;
+};
 
 export class GeminiServiceError extends Error {
   public readonly statusCode: number;
   public readonly code: string;
 
-  constructor(message: string, statusCode: number = 502, code = "gemini_error", options?: ErrorOptions) {
-    super(message, options);
+  public readonly cause?: unknown;
+
+  constructor(message: string, statusCode: number = 502, code = "gemini_error", options?: GeminiErrorOptions) {
+    super(message);
     this.name = "GeminiServiceError";
     this.statusCode = statusCode;
     this.code = code;
+    if (options && "cause" in options) {
+      this.cause = options.cause;
+    }
   }
 }
 

@@ -1,4 +1,3 @@
-import { getGeminiClient } from "../lib/gemini-client.js";
 import {
   Checklist,
   ChecklistReport,
@@ -96,44 +95,48 @@ ${JSON.stringify(checklistItems, null, 2)}
   "summary": "Краткая общая сводка выполнения чек-листа (2-3 предложения)"
 }`;
 
-  const response = await geminiClient.generateContent({
-    model: "gemini-2.5-flash",
-    systemInstruction: systemPrompt,
-    responseMimeType: "application/json",
-    responseSchema: {
-      type: "object",
-      properties: {
-        items: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              id: { type: "string" },
-              status: { type: "string" },
-              score: { type: "number" },
-              evidence: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    text: { type: "string" },
-                    start: { type: "number" },
-                    end: { type: "number" },
+  const response = await executeGeminiRequest(() =>
+    geminiClient.generateContent({
+      model: "gemini-2.5-flash",
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "object",
+          properties: {
+            items: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  status: { type: "string" },
+                  score: { type: "number" },
+                  evidence: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        text: { type: "string" },
+                        start: { type: "number" },
+                        end: { type: "number" },
+                      },
+                      required: ["text"],
+                    },
                   },
-                  required: ["text"],
+                  comment: { type: "string" },
                 },
+                required: ["id", "status", "score", "evidence"],
               },
-              comment: { type: "string" },
             },
-            required: ["id", "status", "score", "evidence"],
+            summary: { type: "string" },
           },
+          required: ["items", "summary"],
         },
-        summary: { type: "string" },
       },
-      required: ["items", "summary"],
-    },
-    contents: userPrompt,
-  });
+      contents,
+    }),
+  );
 
   const rawJson = response.text;
   if (!rawJson) throw new GeminiServiceError("Gemini вернул пустой ответ", 502, "gemini_empty_response");
@@ -219,38 +222,42 @@ ${transcript}
   "outcome": "Итог: что договорились, следующие шаги"
 }`;
 
-  const response = await geminiClient.generateContent({
-    model: "gemini-2.5-flash",
-    systemInstruction: systemPrompt,
-    responseMimeType: "application/json",
-    responseSchema: {
-      type: "object",
-      properties: {
-        topics: {
-          type: "array",
-          items: { type: "string" },
-        },
-        objections: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              category: { type: "string" },
-              client_phrase: { type: "string" },
-              manager_reply: { type: "string" },
-              handling: { type: "string" },
-              advice: { type: "string" },
+  const response = await executeGeminiRequest(() =>
+    geminiClient.generateContent({
+      model: "gemini-2.5-flash",
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "object",
+          properties: {
+            topics: {
+              type: "array",
+              items: { type: "string" },
             },
-            required: ["category", "client_phrase", "handling"],
+            objections: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  category: { type: "string" },
+                  client_phrase: { type: "string" },
+                  manager_reply: { type: "string" },
+                  handling: { type: "string" },
+                  advice: { type: "string" },
+                },
+                required: ["category", "client_phrase", "handling"],
+              },
+            },
+            conversation_essence: { type: "string" },
+            outcome: { type: "string" },
           },
+          required: ["topics", "objections", "conversation_essence", "outcome"],
         },
-        conversation_essence: { type: "string" },
-        outcome: { type: "string" },
       },
-      required: ["topics", "objections", "conversation_essence", "outcome"],
-    },
-    contents: userPrompt,
-  });
+      contents,
+    }),
+  );
 
   const rawJson = response.text;
   if (!rawJson) {
