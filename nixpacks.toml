@@ -3,7 +3,7 @@ nixPkgs = ["nodejs_20"]
 
 [phases.install]
 cmds = [
-  "npm config set registry https://registry.npmmirror.com",
+  "npm config set registry https://registry.npmjs.org/",
   "npm install --omit=dev --include=optional --no-audit --no-fund"
 ]
 
