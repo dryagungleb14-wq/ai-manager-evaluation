@@ -1,9 +1,14 @@
-import type { Config } from "tailwindcss";
-import tailwindcssAnimate from "tailwindcss-animate";
+const tailwindcssAnimate = require("tailwindcss-animate");
 
-const config = {
+/** @type {import('tailwindcss').Config} */
+module.exports = {
   darkMode: ["class"],
-  content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
+  content: [
+    "./index.html",
+    "./src/**/*.{ts,tsx,js,jsx}",
+    "../shared/**/*.{ts,tsx,js,jsx}",
+    "../server/**/*.{ts,tsx,js,jsx}",
+  ],
   theme: {
     container: {
       center: true,
@@ -95,7 +100,13 @@ const config = {
       },
     },
   },
+  safelist: [
+    "border-border",
+    "bg-background",
+    "text-foreground",
+    "ring-ring",
+    "data-[state=open]:animate-in",
+    "data-[state=closed]:animate-out",
+  ],
   plugins: [tailwindcssAnimate],
-} satisfies Config;
-
-export default config;
+};
