@@ -9,6 +9,12 @@
     "build": "vite build",
     "preview": "vite preview"
   },
+  "tailwind": {
+    "config": "./tailwind.config.ts"
+  },
+  "postcss": {
+    "path": "./postcss.config.js"
+  },
   "engines": {
     "node": ">=20 <21"
   },
