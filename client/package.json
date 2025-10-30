@@ -7,13 +7,14 @@
     "dev": "vite",
     "lint": "eslint \"src/**/*.{ts,tsx,js,jsx}\"",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:css-size": "node ./scripts/check-css-size.mjs"
   },
   "tailwind": {
     "config": "./tailwind.config.js"
   },
   "postcss": {
-    "path": "./postcss.config.js"
+    "path": "./postcss.config.cjs"
   },
   "engines": {
     "node": ">=20 <21"
