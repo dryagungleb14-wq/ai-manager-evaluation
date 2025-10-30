@@ -101,6 +101,11 @@ module.exports = {
     },
   },
   safelist: [
+    "dark",
+    "data-[state=open]",
+    "data-[state=closed]",
+    "radix-state-open",
+    "radix-state-closed",
     "border-border",
     "bg-background",
     "text-foreground",
