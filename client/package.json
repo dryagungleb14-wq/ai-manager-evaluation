@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "tailwind": {
-    "config": "./tailwind.config.ts"
+    "config": "./tailwind.config.js"
   },
   "postcss": {
     "path": "./postcss.config.js"
