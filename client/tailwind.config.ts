@@ -4,7 +4,73 @@ import tailwindcssAnimate from "tailwindcss-animate";
 
 const config = {
   darkMode: ["class"],
-  content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
+  content: [
+    "./index.html",
+    "./src/**/*.{js,jsx,ts,tsx}",
+    "../shared/**/*.{ts,tsx}",
+  ],
+  safelist: [
+    // explicit classes used by shadcn/ui components to ensure presence in prod
+    "inline-flex",
+    "items-center",
+    "justify-center",
+    "gap-2",
+    "whitespace-nowrap",
+    "rounded-md",
+    "text-sm",
+    "font-medium",
+    "focus-visible:outline-none",
+    "focus-visible:ring-1",
+    "focus-visible:ring-ring",
+    "disabled:pointer-events-none",
+    "disabled:opacity-50",
+    "min-h-9",
+    "h-9",
+    "w-9",
+    "px-4",
+    "py-2",
+    "px-3",
+    "px-8",
+    "text-xs",
+    "bg-primary",
+    "text-primary-foreground",
+    "bg-secondary",
+    "text-secondary-foreground",
+    "bg-destructive",
+    "text-destructive-foreground",
+    "border",
+    "border-transparent",
+    "shadow-xs",
+    "active:shadow-none",
+    "hover:bg-accent",
+    "active:bg-accent",
+    // layout utilities
+    { pattern: /^(container|max-w-|w-|h-|min-w-|min-h-|flex|grid|col-|row-|gap-|space-|block|inline|hidden)$/ },
+    // spacing
+    { pattern: /^(p|px|py|pt|pr|pb|pl|m|mx|my|mt|mr|mb|ml)-/ },
+    // typography and colors
+    { pattern: /^(text|font|leading|tracking|whitespace|break-)/ },
+    { pattern: /^(bg|from|via|to|fill|stroke|text|border|ring)-/ },
+    // borders and radius
+    { pattern: /^(border|rounded)(-[trbl][er]?)?(-\d+)?$/ },
+    // positioning
+    { pattern: /^(absolute|relative|fixed|sticky|inset|top|right|bottom|left|z-)/ },
+    // effects
+    { pattern: /^(shadow|outline|opacity|translate|scale|rotate)/ },
+    // state variants commonly used by shadcn/ui (apply to patterns above)
+    { pattern: /^(.*)$/, variants: [
+      "hover",
+      "focus",
+      "active",
+      "disabled",
+      "group-hover",
+      "focus-visible",
+      "aria-selected",
+      "aria-checked",
+      "data-[state=open]",
+      "data-[state=closed]",
+    ] },
+  ],
   theme: {
     extend: {
       borderRadius: {
