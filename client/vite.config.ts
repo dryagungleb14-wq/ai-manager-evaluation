@@ -7,7 +7,13 @@ import { fileURLToPath } from "node:url";
 const rootDir = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  base: "./",
+  // Vercel serves the client from the root domain. Using a relative base path
+  // like "./" breaks asset URLs (CSS/JS) on deep links because the browser
+  // resolves them against the current route (e.g. "/dashboard/assets/...").
+  // This caused the Tailwind bundle to 404 in production and the UI appeared
+  // unstyled. Switching back to the default absolute base keeps asset URLs
+  // rooted at "/" so they load correctly no matter which route is opened.
+  base: "/",
   plugins: [react(), tsconfigPaths()],
   resolve: {
     alias: {
