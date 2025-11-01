@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { registerRoutes } from "./routes.js";
 import { setupVite, serveStatic, log } from "./vite-server.js";
+import { createAuthGuard } from "./auth-guard.js";
 import {
   seedDefaultChecklists,
   seedDefaultManagers,
@@ -268,6 +269,10 @@ app.use((req, res, next) => {
 
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
+
+  const authGuard = createAuthGuard();
+  log(`authentication guard ${authGuard.enabled ? "enabled" : "disabled"}`, "auth");
+  app.use(authGuard);
 
   if (!storageUsesDatabase) {
     const fallbackMessage = storageInitializationError
