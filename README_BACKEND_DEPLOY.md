@@ -21,9 +21,10 @@ Create a `.env` file inside `server/` (Railway automatically injects variables a
 | Variable | Description |
 | --- | --- |
 | `PORT` | HTTP port used by Express. Railway injects `PORT` automatically, default is `3000` for local runs. |
-| `CORS_ORIGIN` | Comma-separated list of allowed origins. Use `*` to allow all or set to your deployed frontend URL (e.g. `https://<frontend-on-vercel>.vercel.app`). |
 | `DATABASE_URL` | PostgreSQL connection string. Railway sets this automatically when the Neon plugin is attached. Without it the API falls back to an in-memory store that is not suitable for production. |
 | `GEMINI_API_KEY` | API key from Google AI Studio used by the analyzer and transcription helpers. Required for smoke tests and production traffic. |
+| `FRONTEND_ORIGIN` | Production frontend URL (e.g. `https://ai-manager-evaluation.vercel.app`). Used by the server CORS policy so the Vercel app can reach the API with credentials. |
+| `FRONTEND_ORIGIN_ALT` | Optional secondary frontend origin for preview deployments (e.g. `https://ai-manager-evaluation-git-main.vercel.app`). |
 
 > ℹ️  Railway теперь устанавливает официальные пакеты `cors` и `better-sqlite3` во время production-сборки. Локальные заглушки в [`server/vendor/`](server/vendor/) оставлены для офлайн-разработки, но в продакшене их заменяет полноценная версия из npm.
 
@@ -42,7 +43,7 @@ Railway автоматически использует `nixpacks.toml`, поэ�
 После успешной сборки на Railway выполните быстрые проверки напрямую в запущенном окружении:
 
 1. **Переменные окружения.** В разделе Railway → *Settings → Variables* убедитесь, что указан рабочий `GEMINI_API_KEY` из Google AI Studio. При необходимости обновите ключ до актуального продакшн-значения и перезапустите деплой.
-2. **Health-check.** Вызовите `GET https://<your-service>.up.railway.app/health` и убедитесь, что ответ имеет статус `200` и тело вида `{ "status": "ok" }`.
+2. **Health-check.** Вызовите `GET https://<your-service>.up.railway.app/healthz` и убедитесь, что ответ имеет статус `200` и содержит `{"ok":true,"geminiKey":true}`.
 3. **Аналитика диалога.** Отправьте `POST /analyze` с тестовым транскриптом. Пример payload:
    ```json
    {
@@ -76,7 +77,7 @@ curl http://localhost:3000/healthz
 Expected response:
 
 ```json
-{"status":"ok"}
+{"ok":true,"geminiKey":false,"version":"unknown"}
 ```
 
 Use `npm --prefix server run dev` for a hot-reload development server powered by `tsx`.
@@ -103,5 +104,5 @@ Results are written to [`reports/railway-health.json`](reports/railway-health.js
 
 - **Process crashes on Railway:** Check that the build step finishes successfully, the compiled files are present in `dist/`, and that all required environment variables are defined.
 - **Database connection errors:** Confirm that the `DATABASE_URL` value matches the PostgreSQL instance provisioned in Railway (e.g. the Neon integration) and that the database is reachable from the service.
-- **CORS errors:** Confirm `CORS_ORIGIN` contains the correct domain(s). Separate multiple origins with commas.
+- **CORS errors:** Confirm `FRONTEND_ORIGIN` (and optionally `FRONTEND_ORIGIN_ALT`) contain the correct Vercel domain(s) so the browser origin matches the allow-list.
 - **Health check failures:** Review the generated report in `reports/railway-health.json` and inspect Railway logs for detailed error messages.

@@ -15,6 +15,15 @@ import type { CorsOptions } from "./types/cors-options";
 
 const app = express();
 
+const hasGeminiKey =
+  !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim().length > 0;
+console.log(`[env] GEMINI_API_KEY loaded: ${hasGeminiKey}`);
+if (!hasGeminiKey) {
+  console.warn(
+    "[env] GEMINI_API_KEY is missing. The API will respond with a 503 on Gemini-dependent endpoints.",
+  );
+}
+
 type OriginMatcher = string | RegExp;
 
 const DEFAULT_ALLOWED_ORIGINS: OriginMatcher[] = [
@@ -70,34 +79,6 @@ async function loadEnvConfig(): Promise<void> {
   }
 }
 
-function buildOriginConfig(originSetting: string | undefined): { allowAll: boolean; matchers: OriginMatcher[] } {
-  if (originSetting?.trim() === "*") {
-    return { allowAll: true, matchers: [] };
-  }
-
-  if (!originSetting || originSetting.trim().length === 0) {
-    return { allowAll: false, matchers: DEFAULT_ALLOWED_ORIGINS };
-  }
-
-  const tokens = originSetting
-    .split(",")
-    .map(entry => entry.trim())
-    .filter((entry): entry is string => entry.length > 0);
-
-  const matchers: OriginMatcher[] = tokens.map((entry) => {
-    if (entry.includes("*")) {
-      const escaped = entry
-        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-        .replace(/\\\*/g, ".*");
-      return new RegExp(`^${escaped}$`, "i");
-    }
-
-    return entry;
-  });
-
-  return { allowAll: false, matchers: matchers.length > 0 ? matchers : DEFAULT_ALLOWED_ORIGINS };
-}
-
 function originMatches(origin: string, matchers: OriginMatcher[]): boolean {
   return matchers.some((matcher) => {
     if (typeof matcher === "string") {
@@ -127,9 +108,21 @@ async function ensureServiceVersionLoaded(): Promise<void> {
   }
 }
 
-function createCorsMiddleware(originSetting: string | undefined): RequestHandler {
-  const { allowAll, matchers } = buildOriginConfig(originSetting);
+function resolveAllowedOrigins(): OriginMatcher[] {
+  const explicitOrigins = [
+    process.env.FRONTEND_ORIGIN?.trim(),
+    process.env.FRONTEND_ORIGIN_ALT?.trim(),
+  ].filter((value): value is string => Boolean(value && value.length > 0));
 
+  if (explicitOrigins.length > 0) {
+    return explicitOrigins;
+  }
+
+  return DEFAULT_ALLOWED_ORIGINS;
+}
+
+function createCorsMiddleware(): RequestHandler {
+  const matchers = resolveAllowedOrigins();
   const baseOptions: CorsOptions = {
     credentials: true,
     methods: ["GET", "POST", "OPTIONS"],
@@ -137,16 +130,9 @@ function createCorsMiddleware(originSetting: string | undefined): RequestHandler
     optionsSuccessStatus: 204,
   };
 
-  if (allowAll) {
-    return cors({
-      ...baseOptions,
-      origin: true,
-    });
-  }
-
   return cors({
     ...baseOptions,
-    origin(origin, callback) {
+    origin(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
       if (!origin) {
         callback(null, true);
         return;
@@ -157,14 +143,10 @@ function createCorsMiddleware(originSetting: string | undefined): RequestHandler
         return;
       }
 
-      callback(new Error("Not allowed by CORS"));
+      callback(new Error(`CORS blocked for origin: ${origin}`));
     },
   });
 }
-
-app.get("/healthz", (_req, res) => {
-  res.status(200).json({ status: "ok", version: serviceVersion });
-});
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", version: serviceVersion, uptime: process.uptime() });
@@ -172,6 +154,14 @@ app.get("/health", (_req, res) => {
 
 app.get("/version", (_req, res) => {
   res.status(200).json({ version: serviceVersion });
+});
+
+app.get("/healthz", (_req, res) => {
+  res.json({
+    ok: true,
+    geminiKey: !!process.env.GEMINI_API_KEY,
+    version: process.env.npm_package_version ?? "unknown",
+  });
 });
 
 app.use((req, res, next) => {
@@ -211,8 +201,7 @@ app.use((req, res, next) => {
   const nodeEnv = process.env.NODE_ENV ?? "production";
   app.set("env", nodeEnv);
 
-  const corsOrigin = process.env.CORS_ORIGIN;
-  const corsMiddleware = createCorsMiddleware(corsOrigin);
+  const corsMiddleware = createCorsMiddleware();
   app.use(corsMiddleware);
 
   app.use(express.json());
