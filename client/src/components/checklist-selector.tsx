@@ -195,6 +195,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
             </SelectTrigger>
             <SelectContent
               position="popper"
+              side="top"
               sideOffset={6}
               align="start"
               className="z-50"
