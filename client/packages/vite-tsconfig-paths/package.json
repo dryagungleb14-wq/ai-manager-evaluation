@@ -1,8 +1,6 @@
 {
-  "name": "vite-tsconfig-paths",
+  "name": "@workspace/vite-tsconfig-paths",
   "version": "4.3.2",
   "type": "module",
-  "exports": {
-    ".": "./index.js"
-  }
+  "exports": { ".": "./index.js" }
 }
