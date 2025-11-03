@@ -24,11 +24,9 @@ import {
 import { Checklist, InsertChecklist, AdvancedChecklist } from "@/lib/rest";
 import { useDropdownController } from "@/contexts/dropdown-provider";
 
-// Union type for both simple and advanced checklists
-type AnyChecklist = Checklist | AdvancedChecklist;
+export type AnyChecklist = Checklist | AdvancedChecklist;
 
-// Type guard to check if a checklist is a simple checklist
-function isSimpleChecklist(checklist: AnyChecklist): checklist is Checklist {
+export function isSimpleChecklist(checklist: AnyChecklist): checklist is Checklist {
   return 'items' in checklist;
 }
 
@@ -42,7 +40,7 @@ const ChecklistUpload = lazy(() =>
 );
 
 interface ChecklistSelectorProps {
-  onChecklistChange: (checklist: Checklist) => void;
+  onChecklistChange: (checklist: AnyChecklist) => void;
 }
 
 export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps) {
@@ -93,7 +91,6 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
 
   useEffect(() => {
     if (checklists.length > 0 && !activeId) {
-      // Get stored active ID from localStorage as fallback
       const storedActive = localStorage.getItem("manager-eval-active-checklist");
       const active = storedActive && checklists.find((c) => c.id === storedActive)
         ? storedActive
@@ -102,7 +99,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
       setActiveId(active);
       localStorage.setItem("manager-eval-active-checklist", active);
       const checklist = checklists.find((c) => c.id === active);
-      if (checklist && isSimpleChecklist(checklist)) {
+      if (checklist) {
         onChecklistChange(checklist);
       }
     }
@@ -113,11 +110,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
     localStorage.setItem("manager-eval-active-checklist", value);
     const checklist = checklists.find((c) => c.id === value);
     if (checklist) {
-      // Only call onChecklistChange for simple checklists
-      // Advanced checklists are displayed but not yet supported for analysis
-      if (isSimpleChecklist(checklist)) {
-        onChecklistChange(checklist);
-      }
+      onChecklistChange(checklist);
     }
     dropdown.close();
   };

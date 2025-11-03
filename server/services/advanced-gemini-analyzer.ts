@@ -99,6 +99,22 @@ ${JSON.stringify(checklistData, null, 2)}
 
     const result = JSON.parse(responseText);
 
+    // Enrich result with description and maxScore from checklist
+    for (let i = 0; i < result.stages.length; i++) {
+      const stage = result.stages[i];
+      const checklistStage = checklist.stages.find(s => s.name === stage.stageName);
+      if (checklistStage) {
+        for (let j = 0; j < stage.criteria.length; j++) {
+          const criterion = stage.criteria[j];
+          const checklistCriterion = checklistStage.criteria.find(c => c.id === criterion.id);
+          if (checklistCriterion) {
+            criterion.description = checklistCriterion.description;
+            criterion.maxScore = checklistCriterion.weight;
+          }
+        }
+      }
+    }
+
     // Calculate total score
     let totalScore = 0;
     for (const stage of result.stages) {

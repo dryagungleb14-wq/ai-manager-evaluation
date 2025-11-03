@@ -279,8 +279,10 @@ export const criterionReportSchema = z.object({
   id: z.string(),
   number: z.string(),
   title: z.string(),
+  description: z.string().optional(),
   achievedLevel: z.enum(["max", "mid", "min"]).nullable(),
   score: z.number(),
+  maxScore: z.number().optional(),
   evidence: z.array(z.object({
     text: z.string(),
     timestamp: z.string().optional(),
