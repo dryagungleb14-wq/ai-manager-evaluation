@@ -10,6 +10,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Manager } from "@/lib/rest";
+import { useDropdownController } from "@/contexts/dropdown-provider";
 
 interface ManagerSelectorProps {
   onManagerChange: (managerId: string | null) => void;
@@ -18,6 +19,7 @@ interface ManagerSelectorProps {
 
 export function ManagerSelector({ onManagerChange, selectedManagerId }: ManagerSelectorProps) {
   const [activeId, setActiveId] = useState<string | null>(selectedManagerId || null);
+  const dropdown = useDropdownController("manager-selector");
 
   const { data: managers = [], isLoading } = useQuery<Manager[]>({
     queryKey: ["/api/managers"],
@@ -33,6 +35,7 @@ export function ManagerSelector({ onManagerChange, selectedManagerId }: ManagerS
     const managerId = value === "none" ? null : value;
     setActiveId(managerId);
     onManagerChange(managerId);
+    dropdown.close();
   };
 
   const activeManager = managers.find((m) => m.id === activeId);
@@ -56,11 +59,21 @@ export function ManagerSelector({ onManagerChange, selectedManagerId }: ManagerS
         <CardTitle>Выбор менеджера</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Select value={activeId || "none"} onValueChange={handleSelectChange}>
+        <Select
+          value={activeId || "none"}
+          onValueChange={handleSelectChange}
+          open={dropdown.open}
+          onOpenChange={dropdown.onOpenChange}
+        >
           <SelectTrigger data-testid="select-manager">
             <SelectValue placeholder="Выберите менеджера" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent
+            position="popper"
+            sideOffset={6}
+            align="start"
+            className="z-50"
+          >
             <SelectItem value="none" data-testid="select-manager-none">
               Не указан
             </SelectItem>

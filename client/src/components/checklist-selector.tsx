@@ -22,6 +22,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Checklist, InsertChecklist } from "@/lib/rest";
+import { useDropdownController } from "@/contexts/dropdown-provider";
 
 const ChecklistUpload = lazy(() =>
   import("@/components/checklist-upload").then((module) => ({
@@ -37,6 +38,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
   const [activeId, setActiveId] = useState<string>("");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const { toast } = useToast();
+  const dropdown = useDropdownController("checklist-selector");
 
   // Fetch checklists from API
   const { data: checklists = [], isLoading } = useQuery<Checklist[]>({
@@ -93,6 +95,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
     if (checklist) {
       onChecklistChange(checklist);
     }
+    dropdown.close();
   };
 
   const handleExport = () => {
@@ -180,11 +183,22 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
           <CardTitle className="text-lg font-medium">Чек-лист</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Select value={activeId} onValueChange={handleSelectChange} disabled={isLoading}>
+          <Select
+            value={activeId}
+            onValueChange={handleSelectChange}
+            disabled={isLoading}
+            open={dropdown.open}
+            onOpenChange={dropdown.onOpenChange}
+          >
             <SelectTrigger data-testid="select-checklist">
               <SelectValue placeholder={isLoading ? "Загрузка..." : "Выберите чек-лист"} />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent
+              position="popper"
+              sideOffset={6}
+              align="start"
+              className="z-50"
+            >
               {checklists.map((checklist) => (
                 <SelectItem key={checklist.id} value={checklist.id}>
                   {checklist.name}

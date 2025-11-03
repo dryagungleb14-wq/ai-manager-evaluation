@@ -5,6 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/lib/theme-provider";
+import { DropdownProvider } from "@/contexts/dropdown-provider";
 
 const Home = lazy(() => import("@/pages/home"));
 const History = lazy(() => import("@/pages/history"));
@@ -29,16 +30,18 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
-          <Toaster />
-          <Suspense
-            fallback={
-              <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
-                Загрузка интерфейса...
-              </div>
-            }
-          >
-            <Router />
-          </Suspense>
+          <DropdownProvider>
+            <Toaster />
+            <Suspense
+              fallback={
+                <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
+                  Загрузка интерфейса...
+                </div>
+              }
+            >
+              <Router />
+            </Suspense>
+          </DropdownProvider>
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
