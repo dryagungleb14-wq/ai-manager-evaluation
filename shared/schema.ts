@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { pgTable, serial, integer, text, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, jsonb, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 
 // Типы чек-листов
@@ -222,3 +222,179 @@ export type DbChecklist = typeof checklists.$inferSelect;
 export type InsertDbChecklist = z.infer<typeof insertChecklistDbSchema>;
 export type DbAnalysis = typeof analyses.$inferSelect;
 export type InsertDbAnalysis = z.infer<typeof insertAnalysisDbSchema>;
+
+// ============================================
+// Advanced Checklist System (MAX/MID/MIN)
+// ============================================
+
+// Criterion level (MAX, MID, MIN)
+export const criterionLevelSchema = z.object({
+  description: z.string(),
+  score: z.number(),
+});
+
+export type CriterionLevel = z.infer<typeof criterionLevelSchema>;
+
+// Checklist criterion
+export const checklistCriterionSchema = z.object({
+  id: z.string(),
+  number: z.string(), // "1.1", "2.1", etc.
+  title: z.string(),
+  description: z.string(),
+  weight: z.number(),
+  max: criterionLevelSchema.optional(),
+  mid: criterionLevelSchema.optional(),
+  min: criterionLevelSchema.optional(),
+  isBinary: z.boolean().optional(),
+});
+
+export type ChecklistCriterion = z.infer<typeof checklistCriterionSchema>;
+
+// Checklist stage
+export const checklistStageSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  order: z.number(),
+  criteria: z.array(checklistCriterionSchema),
+});
+
+export type ChecklistStage = z.infer<typeof checklistStageSchema>;
+
+// Advanced checklist
+export const advancedChecklistSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  version: z.string(),
+  type: z.literal("advanced"),
+  totalScore: z.number(),
+  stages: z.array(checklistStageSchema),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+});
+
+export type AdvancedChecklist = z.infer<typeof advancedChecklistSchema>;
+
+// Criterion report (result for single criterion)
+export const criterionReportSchema = z.object({
+  id: z.string(),
+  number: z.string(),
+  title: z.string(),
+  achievedLevel: z.enum(["max", "mid", "min"]).nullable(),
+  score: z.number(),
+  evidence: z.array(z.object({
+    text: z.string(),
+    timestamp: z.string().optional(),
+  })),
+  comment: z.string(),
+});
+
+export type CriterionReport = z.infer<typeof criterionReportSchema>;
+
+// Stage report
+export const stageReportSchema = z.object({
+  stageName: z.string(),
+  criteria: z.array(criterionReportSchema),
+});
+
+export type StageReport = z.infer<typeof stageReportSchema>;
+
+// Advanced checklist report
+export const advancedChecklistReportSchema = z.object({
+  checklistId: z.string(),
+  totalScore: z.number(),
+  maxPossibleScore: z.number(),
+  percentage: z.number(),
+  stages: z.array(stageReportSchema),
+  summary: z.string(),
+});
+
+export type AdvancedChecklistReport = z.infer<typeof advancedChecklistReportSchema>;
+
+// Database tables for advanced checklists
+export const advancedChecklists = pgTable("advanced_checklists", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  version: text("version").notNull(),
+  totalScore: integer("total_score").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const checklistStages = pgTable("checklist_stages", {
+  id: serial("id").primaryKey(),
+  checklistId: integer("checklist_id").references(() => advancedChecklists.id).notNull(),
+  name: text("name").notNull(),
+  order: integer("order").notNull(),
+});
+
+export const checklistCriteria = pgTable("checklist_criteria", {
+  id: serial("id").primaryKey(),
+  stageId: integer("stage_id").references(() => checklistStages.id).notNull(),
+  number: text("number"),
+  title: text("title").notNull(),
+  description: text("description"),
+  weight: integer("weight").notNull(),
+  isBinary: boolean("is_binary").default(false),
+  levels: jsonb("levels").$type<{
+    max?: CriterionLevel;
+    mid?: CriterionLevel;
+    min?: CriterionLevel;
+  }>(),
+});
+
+export const checklistHistory = pgTable("checklist_history", {
+  id: serial("id").primaryKey(),
+  checklistId: integer("checklist_id").references(() => advancedChecklists.id).notNull(),
+  action: text("action").notNull(), // "created", "updated", "deleted"
+  changes: jsonb("changes"),
+  userId: text("user_id"),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
+export const advancedAnalyses = pgTable("advanced_analyses", {
+  id: serial("id").primaryKey(),
+  checklistId: integer("checklist_id").references(() => advancedChecklists.id),
+  managerId: integer("manager_id").references(() => managers.id),
+  source: text("source", { enum: ["call", "correspondence"] }).notNull(),
+  language: text("language").notNull().default("ru"),
+  transcript: text("transcript").notNull(),
+  report: jsonb("report").$type<AdvancedChecklistReport>().notNull(),
+  analyzedAt: timestamp("analyzed_at").defaultNow().notNull(),
+});
+
+// Drizzle-Zod schemas for inserts
+export const insertAdvancedChecklistDbSchema = createInsertSchema(advancedChecklists).omit({ 
+  id: true,
+  createdAt: true, 
+  updatedAt: true 
+});
+
+export const insertChecklistStageDbSchema = createInsertSchema(checklistStages).omit({ 
+  id: true,
+});
+
+export const insertChecklistCriterionDbSchema = createInsertSchema(checklistCriteria).omit({ 
+  id: true,
+});
+
+export const insertChecklistHistoryDbSchema = createInsertSchema(checklistHistory).omit({ 
+  id: true,
+  timestamp: true,
+});
+
+export const insertAdvancedAnalysisDbSchema = createInsertSchema(advancedAnalyses).omit({ 
+  id: true,
+  analyzedAt: true,
+});
+
+// Types from Drizzle tables
+export type DbAdvancedChecklist = typeof advancedChecklists.$inferSelect;
+export type InsertDbAdvancedChecklist = z.infer<typeof insertAdvancedChecklistDbSchema>;
+export type DbChecklistStage = typeof checklistStages.$inferSelect;
+export type InsertDbChecklistStage = z.infer<typeof insertChecklistStageDbSchema>;
+export type DbChecklistCriterion = typeof checklistCriteria.$inferSelect;
+export type InsertDbChecklistCriterion = z.infer<typeof insertChecklistCriterionDbSchema>;
+export type DbChecklistHistory = typeof checklistHistory.$inferSelect;
+export type InsertDbChecklistHistory = z.infer<typeof insertChecklistHistoryDbSchema>;
+export type DbAdvancedAnalysis = typeof advancedAnalyses.$inferSelect;
+export type InsertDbAdvancedAnalysis = z.infer<typeof insertAdvancedAnalysisDbSchema>;

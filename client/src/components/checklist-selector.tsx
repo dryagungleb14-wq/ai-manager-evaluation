@@ -201,7 +201,14 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
             >
               {checklists.map((checklist) => (
                 <SelectItem key={checklist.id} value={checklist.id}>
-                  {checklist.name}
+                  <div className="flex items-center gap-2">
+                    <span>{checklist.name}</span>
+                    {checklist.type === "advanced" && (
+                      <Badge variant="secondary" className="text-xs">
+                        Продвинутый
+                      </Badge>
+                    )}
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>
