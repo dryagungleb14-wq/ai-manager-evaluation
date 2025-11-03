@@ -33,12 +33,6 @@ const ChecklistSelector = lazy(() =>
   }))
 );
 
-const ManagerSelector = lazy(() =>
-  import("@/components/manager-selector").then((module) => ({
-    default: module.ManagerSelector,
-  }))
-);
-
 const AnalysisResults = lazy(() =>
   import("@/components/analysis-results").then((module) => ({
     default: module.AnalysisResults,
@@ -52,7 +46,6 @@ export default function Home() {
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeChecklist, setActiveChecklist] = useState<Checklist | null>(null);
-  const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);
   const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
   const { toast } = useToast();
 
@@ -91,7 +84,6 @@ export default function Home() {
         checklist: activeChecklist,
         language: "ru",
         source: activeTab,
-        ...(selectedManagerId !== null ? { managerId: selectedManagerId } : {}),
       };
 
       const response = await fetch(buildApiUrl("/api/analyze"), {
@@ -252,18 +244,6 @@ export default function Home() {
 
           {/* Sidebar */}
           <aside className="space-y-6">
-            <Suspense
-              fallback={
-                <Card className="p-6 text-center text-muted-foreground">
-                  Загрузка списка менеджеров...
-                </Card>
-              }
-            >
-              <ManagerSelector
-                onManagerChange={setSelectedManagerId}
-                selectedManagerId={selectedManagerId}
-              />
-            </Suspense>
             <Suspense
               fallback={
                 <Card className="p-6 text-center text-muted-foreground">
