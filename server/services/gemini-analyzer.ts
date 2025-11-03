@@ -94,6 +94,8 @@ ${JSON.stringify(checklistItems, null, 2)}
   "summary": "Краткая общая сводка выполнения чек-листа (2-3 предложения)"
 }`;
 
+  console.log(`[Simple Analyzer] Prompt length: ${(systemPrompt + contents).length} chars, Transcript: ${transcript.length} chars, Checklist items: ${checklist.items.length}`);
+
   const geminiClient = getGeminiClient();
   const response = await executeGeminiRequest(() =>
     geminiClient.generateContent({

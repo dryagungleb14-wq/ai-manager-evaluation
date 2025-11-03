@@ -13,68 +13,79 @@ export async function analyzeAdvancedChecklist(
   language: string = "ru"
 ): Promise<AdvancedChecklistReport> {
   try {
-    const systemPrompt = `Ты эксперт по оценке качества работы менеджеров.
+    const systemPrompt = `Эксперт по оценке менеджеров. Для каждого критерия определи уровень (MAX/MID/MIN/null), балл, цитаты, комментарий.
 
-ЗАДАЧА: Проанализируй диалог и для КАЖДОГО критерия определи:
-1. Какой уровень достигнут: MAX (идеально), MID (средне), MIN (неудовлетворительно) или null (критерий не применим/не выполнен)
-2. Балл за этот уровень (согласно описанию уровня)
-3. Цитаты из диалога (evidence) с временными метками если возможно
-4. Краткий комментарий
+MAX = идеально выполнен
+MID = частично выполнен  
+MIN = плохо выполнен
+null = не выполнен
 
-ПРАВИЛА ОЦЕНКИ:
-- MAX: Менеджер выполнил критерий идеально, все аспекты учтены
-- MID: Критерий выполнен частично или с недочётами
-- MIN: Критерий выполнен минимально или с серьёзными проблемами
-- null: Критерий не применим или вообще не выполнен
-
-Для каждого критерия используй описания max/mid/min из чек-листа для определения уровня.
-Если у критерия нет градаций (только weight), то оценивай бинарно: выполнен = weight баллов, не выполнен = 0.
-
-ФОРМАТ ОТВЕТА (строгий JSON):
+Ответ строго в JSON:
 {
   "stages": [
     {
-      "stageName": "Название этапа",
+      "stageName": "Этап",
       "criteria": [
         {
-          "id": "criterion-1.1",
+          "id": "id",
           "number": "1.1",
-          "title": "Название критерия",
+          "title": "название",
           "achievedLevel": "max|mid|min|null",
           "score": 5,
-          "evidence": [{ "text": "цитата из диалога", "timestamp": "12.5" }],
-          "comment": "Краткий комментарий о выполнении"
+          "evidence": [{"text": "цитата", "timestamp": "12"}],
+          "comment": "комментарий"
         }
       ]
     }
   ],
-  "summary": "Общая сводка по всем этапам (2-3 предложения)"
+  "summary": "Сводка 2-3 предложения"
 }`;
 
     const checklistData = checklist.stages.map(stage => ({
       name: stage.name,
-      criteria: stage.criteria.map(c => ({
-        id: c.id,
-        number: c.number,
-        title: c.title,
-        description: c.description,
-        weight: c.weight,
-        max: c.max,
-        mid: c.mid,
-        min: c.min,
-        isBinary: c.isBinary,
-      })),
+      criteria: stage.criteria.map(c => {
+        const compact: {
+          id: string;
+          n: string;
+          t: string;
+          w: number;
+          max?: { d: string; s: number };
+          mid?: { d: string; s: number };
+          min?: { d: string; s: number };
+          bin?: boolean;
+        } = {
+          id: c.id,
+          n: c.number,
+          t: c.title,
+          w: c.weight,
+        };
+        if (c.max) compact.max = { d: c.max.description, s: c.max.score };
+        if (c.mid) compact.mid = { d: c.mid.description, s: c.mid.score };
+        if (c.min) compact.min = { d: c.min.description, s: c.min.score };
+        if (c.isBinary) compact.bin = true;
+        return compact;
+      }),
     }));
 
-    const contents = `ДИАЛОГ ДЛЯ АНАЛИЗА:
+    const contents = `ДИАЛОГ:
 """
 ${transcript}
 """
 
-ЧЕК-ЛИСТ:
-${JSON.stringify(checklistData, null, 2)}
+КРИТЕРИИ:
+${JSON.stringify(checklistData)}
 
-Проанализируй диалог согласно чек-листу и верни результат в указанном JSON формате.`;
+Проанализируй и верни JSON.`;
+
+    const fullPrompt = systemPrompt + "\n\n" + contents;
+    const promptLength = fullPrompt.length;
+    const totalCriteria = checklist.stages.reduce((acc, s) => acc + s.criteria.length, 0);
+    console.log(
+      `[Advanced Analyzer] Prompt length: ${promptLength} chars, ` +
+      `Transcript: ${transcript.length} chars, ` +
+      `Checklist stages: ${checklist.stages.length}, ` +
+      `Total criteria: ${totalCriteria}`
+    );
 
     const geminiClient = getGeminiClient();
     const response = await executeGeminiRequest(() =>
@@ -83,7 +94,7 @@ ${JSON.stringify(checklistData, null, 2)}
         contents: [
           {
             role: "user",
-            parts: [{ text: systemPrompt + "\n\n" + contents }],
+            parts: [{ text: fullPrompt }],
           },
         ],
         config: { 

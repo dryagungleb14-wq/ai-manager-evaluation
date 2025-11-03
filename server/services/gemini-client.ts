@@ -1,4 +1,4 @@
-const DEFAULT_TIMEOUT_MS = 30000;
+const DEFAULT_TIMEOUT_MS = 60000;
 const MAX_ATTEMPTS = 3;
 const BACKOFF_BASE_MS = 500;
 const DEFAULT_API_BASE_URL = "https://generativelanguage.googleapis.com";
