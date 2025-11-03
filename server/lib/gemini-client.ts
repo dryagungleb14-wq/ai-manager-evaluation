@@ -148,8 +148,8 @@ export class GeminiClient {
   private readonly apiKey: string;
   private readonly fetchImpl: typeof fetch;
 
-  constructor(apiKey: string | undefined, fetchImpl: typeof fetch = fetch) {
-    this.apiKey = apiKey?.trim() ?? "";
+  constructor(apiKey: string, fetchImpl: typeof fetch = fetch) {
+    this.apiKey = apiKey.trim();
     this.fetchImpl = fetchImpl;
   }
 
@@ -190,9 +190,16 @@ export class GeminiClient {
 let sharedClient: GeminiClient | null = null;
 
 export function getGeminiClient(): GeminiClient {
-  if (!sharedClient) {
-    sharedClient = new GeminiClient(process.env.GEMINI_API_KEY);
+  if (sharedClient) {
+    return sharedClient;
   }
 
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not set");
+  }
+
+  sharedClient = new GeminiClient(apiKey);
   return sharedClient;
 }
