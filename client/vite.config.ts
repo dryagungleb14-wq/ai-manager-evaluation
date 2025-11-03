@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import tailwindcss from "tailwindcss";
+import autoprefixer from "autoprefixer";
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
 
@@ -15,6 +17,11 @@ export default defineConfig({
   // rooted at "/" so they load correctly no matter which route is opened.
   base: "/",
   plugins: [react(), tsconfigPaths()],
+  css: {
+    postcss: {
+      plugins: [tailwindcss(), autoprefixer()],
+    },
+  },
   resolve: {
     alias: {
       "@": resolve(rootDir, "src"),
@@ -41,5 +48,5 @@ export default defineConfig({
     },
     chunkSizeWarningLimit: 800,
   },
-  server: { port: 5173 }
+  server: { port: 5173 },
 });
