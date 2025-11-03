@@ -189,7 +189,9 @@ export async function registerRoutes(app: Express): Promise<void> {
   app.get("/api/checklists", async (req, res) => {
     try {
       const checklists = await storage.getChecklists();
-      res.json(checklists);
+      // Add type field for consistency
+      const checklistsWithType = checklists.map(c => ({ ...c, type: "simple" as const }));
+      res.json(checklistsWithType);
     } catch (error) {
       console.error("Get checklists error:", error);
       res.status(500).json({
@@ -205,7 +207,8 @@ export async function registerRoutes(app: Express): Promise<void> {
       if (!checklist) {
         return res.status(404).json({ error: "Чек-лист не найден" });
       }
-      res.json(checklist);
+      // Add type field for consistency
+      res.json({ ...checklist, type: "simple" as const });
     } catch (error) {
       console.error("Get checklist error:", error);
       res.status(500).json({
