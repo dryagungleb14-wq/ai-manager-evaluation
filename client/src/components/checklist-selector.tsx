@@ -214,69 +214,72 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
             </SelectContent>
           </Select>
 
-          <div className="flex flex-wrap gap-2">
-            <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="default"
-                  size="sm"
-                  data-testid="button-upload-checklist"
-                >
-                  <FileUp className="h-4 w-4 mr-2" />
-                  Загрузить файл
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>Загрузить чек-лист из файла</DialogTitle>
-                  <DialogDescription>
-                    Поддерживаются текстовые (TXT, MD) и табличные (CSV, Excel) форматы.
-                    AI автоматически поймёт структуру вашего чек-листа.
-                  </DialogDescription>
-                </DialogHeader>
-                <Suspense
-                  fallback={
-                    <div className="py-8 text-center text-sm text-muted-foreground">
-                      Загрузка формы загрузки...
-                    </div>
-                  }
-                >
-                  <ChecklistUpload onChecklistCreated={handleChecklistUploaded} />
-                </Suspense>
-              </DialogContent>
-            </Dialog>
+          {/* Temporarily hidden: Upload, Duplicate, Export, Import buttons */}
+          {false && (
+            <div className="flex flex-wrap gap-2">
+              <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    data-testid="button-upload-checklist"
+                  >
+                    <FileUp className="h-4 w-4 mr-2" />
+                    Загрузить файл
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Загрузить чек-лист из файла</DialogTitle>
+                    <DialogDescription>
+                      Поддерживаются текстовые (TXT, MD) и табличные (CSV, Excel) форматы.
+                      AI автоматически поймёт структуру вашего чек-листа.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <Suspense
+                    fallback={
+                      <div className="py-8 text-center text-sm text-muted-foreground">
+                        Загрузка формы загрузки...
+                      </div>
+                    }
+                  >
+                    <ChecklistUpload onChecklistCreated={handleChecklistUploaded} />
+                  </Suspense>
+                </DialogContent>
+              </Dialog>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDuplicate}
-              disabled={!activeId || createChecklistMutation.isPending}
-              data-testid="button-duplicate-checklist"
-            >
-              <Copy className="h-4 w-4 mr-2" />
-              Дубликат
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExport}
-              disabled={!activeId}
-              data-testid="button-export-checklist"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Экспорт
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleImport}
-              disabled={createChecklistMutation.isPending}
-              data-testid="button-import-checklist"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Импорт JSON
-            </Button>
-          </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDuplicate}
+                disabled={!activeId || createChecklistMutation.isPending}
+                data-testid="button-duplicate-checklist"
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Дубликат
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={!activeId}
+                data-testid="button-export-checklist"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Экспорт
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleImport}
+                disabled={createChecklistMutation.isPending}
+                data-testid="button-import-checklist"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Импорт JSON
+              </Button>
+            </div>
+          )}
 
           {activeChecklist && (
             <div className="space-y-3 pt-2">
