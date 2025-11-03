@@ -21,8 +21,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Checklist, InsertChecklist } from "@/lib/rest";
+import { Checklist, InsertChecklist, AdvancedChecklist } from "@/lib/rest";
 import { useDropdownController } from "@/contexts/dropdown-provider";
+
+// Union type for both simple and advanced checklists
+type AnyChecklist = Checklist | AdvancedChecklist;
 
 const ChecklistUpload = lazy(() =>
   import("@/components/checklist-upload").then((module) => ({
@@ -46,12 +49,12 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
   });
 
   // Fetch advanced checklists from API
-  const { data: advancedChecklists = [], isLoading: isLoadingAdvanced } = useQuery<Checklist[]>({
+  const { data: advancedChecklists = [], isLoading: isLoadingAdvanced } = useQuery<AdvancedChecklist[]>({
     queryKey: ["/api/advanced-checklists"],
   });
 
   // Combine both types of checklists
-  const checklists = [...simpleChecklists, ...advancedChecklists];
+  const checklists: AnyChecklist[] = [...simpleChecklists, ...advancedChecklists];
   const isLoading = isLoadingSimple || isLoadingAdvanced;
 
   // Create checklist mutation
@@ -91,7 +94,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
       setActiveId(active);
       localStorage.setItem("manager-eval-active-checklist", active);
       const checklist = checklists.find((c) => c.id === active);
-      if (checklist) {
+      if (checklist && 'items' in checklist) {
         onChecklistChange(checklist);
       }
     }
@@ -102,7 +105,11 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
     localStorage.setItem("manager-eval-active-checklist", value);
     const checklist = checklists.find((c) => c.id === value);
     if (checklist) {
-      onChecklistChange(checklist);
+      // Only call onChecklistChange for simple checklists
+      // Advanced checklists are displayed but not yet supported for analysis
+      if ('items' in checklist) {
+        onChecklistChange(checklist);
+      }
     }
     dropdown.close();
   };
@@ -152,7 +159,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
 
   const handleDuplicate = async () => {
     const checklist = checklists.find((c) => c.id === activeId);
-    if (!checklist) return;
+    if (!checklist || !('items' in checklist)) return;
 
     // Create payload without ID (server will generate it)
     const { id, ...baseChecklist } = checklist;
@@ -292,42 +299,70 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
 
           {activeChecklist && (
             <div className="space-y-3 pt-2">
-              <div className="text-sm text-muted-foreground">
-                Пунктов: {activeChecklist.items.length}
-              </div>
-              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-                {activeChecklist.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-3 rounded-lg bg-card border border-card-border space-y-1"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-sm font-medium">{item.title}</span>
-                      <Badge
-                        variant={
-                          item.type === "mandatory"
-                            ? "default"
-                            : item.type === "recommended"
-                            ? "secondary"
-                            : "destructive"
-                        }
-                        className="text-xs shrink-0"
-                      >
-                        {item.type === "mandatory"
-                          ? "Обязательный"
-                          : item.type === "recommended"
-                          ? "Рекомендуемый"
-                          : "Запрещённый"}
-                      </Badge>
-                    </div>
-                    {item.criteria.llm_hint && (
-                      <p className="text-xs text-muted-foreground">
-                        {item.criteria.llm_hint}
-                      </p>
-                    )}
+              {'items' in activeChecklist ? (
+                <>
+                  <div className="text-sm text-muted-foreground">
+                    Пунктов: {activeChecklist.items.length}
                   </div>
-                ))}
-              </div>
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+                    {activeChecklist.items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-3 rounded-lg bg-card border border-card-border space-y-1"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm font-medium">{item.title}</span>
+                          <Badge
+                            variant={
+                              item.type === "mandatory"
+                                ? "default"
+                                : item.type === "recommended"
+                                ? "secondary"
+                                : "destructive"
+                            }
+                            className="text-xs shrink-0"
+                          >
+                            {item.type === "mandatory"
+                              ? "Обязательный"
+                              : item.type === "recommended"
+                              ? "Рекомендуемый"
+                              : "Запрещённый"}
+                          </Badge>
+                        </div>
+                        {item.criteria.llm_hint && (
+                          <p className="text-xs text-muted-foreground">
+                            {item.criteria.llm_hint}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-sm text-muted-foreground">
+                    Этапов: {activeChecklist.stages.length} | Всего баллов: {activeChecklist.totalScore}
+                  </div>
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+                    {activeChecklist.stages.map((stage) => (
+                      <div
+                        key={stage.id}
+                        className="p-3 rounded-lg bg-card border border-card-border space-y-1"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm font-medium">{stage.name}</span>
+                          <Badge variant="secondary" className="text-xs shrink-0">
+                            {stage.criteria.length} критериев
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Баллов: {stage.criteria.reduce((sum, c) => sum + c.weight, 0)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </CardContent>
