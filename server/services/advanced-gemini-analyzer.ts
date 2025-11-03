@@ -44,7 +44,16 @@ null = не выполнен
     const checklistData = checklist.stages.map(stage => ({
       name: stage.name,
       criteria: stage.criteria.map(c => {
-        const compact: any = {
+        const compact: {
+          id: string;
+          n: string;
+          t: string;
+          w: number;
+          max?: { d: string; s: number };
+          mid?: { d: string; s: number };
+          min?: { d: string; s: number };
+          bin?: boolean;
+        } = {
           id: c.id,
           n: c.number,
           t: c.title,
@@ -70,7 +79,13 @@ ${JSON.stringify(checklistData)}
 
     const fullPrompt = systemPrompt + "\n\n" + contents;
     const promptLength = fullPrompt.length;
-    console.log(`[Advanced Analyzer] Prompt length: ${promptLength} chars, Transcript: ${transcript.length} chars, Checklist stages: ${checklist.stages.length}, Total criteria: ${checklist.stages.reduce((acc, s) => acc + s.criteria.length, 0)}`);
+    const totalCriteria = checklist.stages.reduce((acc, s) => acc + s.criteria.length, 0);
+    console.log(
+      `[Advanced Analyzer] Prompt length: ${promptLength} chars, ` +
+      `Transcript: ${transcript.length} chars, ` +
+      `Checklist stages: ${checklist.stages.length}, ` +
+      `Total criteria: ${totalCriteria}`
+    );
 
     const geminiClient = getGeminiClient();
     const response = await executeGeminiRequest(() =>
