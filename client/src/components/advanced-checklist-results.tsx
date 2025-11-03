@@ -1,19 +1,24 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableFooter,
+} from "@/components/ui/table";
 import { CheckCircle2, AlertCircle, XCircle, MinusCircle } from "lucide-react";
 
 export interface CriterionReport {
   id: string;
   number: string;
   title: string;
+  description?: string;
   achievedLevel: "max" | "mid" | "min" | null;
   score: number;
+  maxScore?: number;
   evidence: Array<{ text: string; timestamp?: string }>;
   comment: string;
 }
@@ -86,82 +91,113 @@ export function AdvancedChecklistResults({ report }: AdvancedChecklistResultsPro
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* Summary */}
         <div className="p-4 bg-muted rounded-lg">
           <p className="text-sm">
             <strong>Итоговая сводка:</strong> {report.summary}
           </p>
         </div>
 
-        {/* Stages */}
-        <Accordion type="multiple" className="w-full">
-          {report.stages.map((stage, stageIndex) => {
-            const stageScore = stage.criteria.reduce((sum, c) => sum + c.score, 0);
-            const stageCriteria = stage.criteria.length;
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[120px]">Критерий</TableHead>
+                <TableHead className="min-w-[200px]">Описание</TableHead>
+                <TableHead className="w-[100px] text-center">Балл</TableHead>
+                <TableHead className="w-[100px] text-center">Максимум</TableHead>
+                <TableHead className="min-w-[250px]">Комментарий</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {report.stages.map((stage, stageIndex) => {
+                const stageScore = stage.criteria.reduce((sum, c) => sum + c.score, 0);
+                const stageMaxScore = stage.criteria.reduce((sum, c) => sum + (c.maxScore || 0), 0);
 
-            return (
-              <AccordionItem key={stageIndex} value={`stage-${stageIndex}`}>
-                <AccordionTrigger className="hover:no-underline">
-                  <div className="flex items-center justify-between w-full pr-4">
-                    <span className="font-semibold text-lg">{stage.stageName}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {stageCriteria} критериев • {stageScore} баллов
-                    </span>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="space-y-4 pt-2">
+                return (
+                  <>
+                    <TableRow key={`stage-${stageIndex}`} className="bg-muted/50">
+                      <TableCell colSpan={5} className="font-semibold">
+                        {stage.stageName}
+                      </TableCell>
+                    </TableRow>
                     {stage.criteria.map((criterion) => (
-                      <div
-                        key={criterion.id}
-                        className="p-4 border rounded-lg hover:shadow-sm transition-shadow"
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex items-start gap-2">
+                      <TableRow key={criterion.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
                             {getLevelIcon(criterion.achievedLevel)}
-                            <div>
-                              <span className="font-medium">
-                                {criterion.number}
-                              </span>
-                              <span className="ml-2">{criterion.title}</span>
-                            </div>
+                            <span>{criterion.number}</span>
                           </div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            {criterion.title}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {criterion.description || criterion.comment}
+                        </TableCell>
+                        <TableCell className="text-center">
                           <Badge variant={getLevelBadgeVariant(criterion.achievedLevel)}>
-                            {criterion.achievedLevel?.toUpperCase() || "N/A"} •{" "}
-                            {criterion.score} баллов
+                            {criterion.score}
                           </Badge>
-                        </div>
-
-                        <p className="text-sm text-muted-foreground mb-2 ml-6">
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {criterion.maxScore || "-"}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
                           {criterion.comment}
-                        </p>
-
-                        {criterion.evidence.length > 0 && (
-                          <div className="space-y-1 ml-6">
-                            <p className="text-xs font-medium">Цитаты:</p>
-                            {criterion.evidence.map((ev, i) => (
-                              <blockquote
-                                key={i}
-                                className="text-xs italic border-l-2 pl-2 py-1 bg-muted/50"
-                              >
-                                "{ev.text}"
-                                {ev.timestamp && (
-                                  <span className="ml-2 text-muted-foreground">
-                                    ({ev.timestamp})
-                                  </span>
-                                )}
-                              </blockquote>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                          {criterion.evidence.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              {criterion.evidence.map((ev, i) => (
+                                <div
+                                  key={i}
+                                  className="text-xs italic border-l-2 pl-2 py-1 bg-muted/50"
+                                >
+                                  "{ev.text}"
+                                  {ev.timestamp && (
+                                    <span className="ml-2 text-muted-foreground">
+                                      ({ev.timestamp})
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            );
-          })}
-        </Accordion>
+                    <TableRow className="bg-muted/30">
+                      <TableCell colSpan={2} className="font-semibold text-right">
+                        Итого по этапу:
+                      </TableCell>
+                      <TableCell className="text-center font-semibold">
+                        {stageScore}
+                      </TableCell>
+                      <TableCell className="text-center font-semibold">
+                        {stageMaxScore}
+                      </TableCell>
+                      <TableCell></TableCell>
+                    </TableRow>
+                  </>
+                );
+              })}
+            </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell colSpan={2} className="font-bold text-right">
+                  ОБЩИЙ БАЛЛ:
+                </TableCell>
+                <TableCell className="text-center font-bold">
+                  {report.totalScore}
+                </TableCell>
+                <TableCell className="text-center font-bold">
+                  {report.maxPossibleScore}
+                </TableCell>
+                <TableCell className="text-center font-bold">
+                  {report.percentage}%
+                </TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );

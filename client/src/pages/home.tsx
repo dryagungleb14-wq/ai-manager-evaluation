@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Checklist, AnalysisReport } from "@/lib/rest";
+import { AnalysisReport, AdvancedChecklistReport } from "@/lib/rest";
 import { buildApiUrl } from "@/lib/apiBase";
+import type { AnyChecklist } from "@/components/checklist-selector";
 
 const AudioUpload = lazy(() =>
   import("@/components/audio-upload").then((module) => ({
@@ -39,14 +40,20 @@ const AnalysisResults = lazy(() =>
   }))
 );
 
+const AdvancedChecklistResults = lazy(() =>
+  import("@/components/advanced-checklist-results").then((module) => ({
+    default: module.AdvancedChecklistResults,
+  }))
+);
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"call" | "correspondence">("call");
   const [transcript, setTranscript] = useState("");
   const [correspondenceText, setCorrespondenceText] = useState("");
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [activeChecklist, setActiveChecklist] = useState<Checklist | null>(null);
-  const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
+  const [activeChecklist, setActiveChecklist] = useState<AnyChecklist | null>(null);
+  const [analysisReport, setAnalysisReport] = useState<AnalysisReport | AdvancedChecklistReport | null>(null);
   const { toast } = useToast();
 
   // Сброс отчёта при загрузке нового контента
@@ -79,26 +86,51 @@ export default function Home() {
     setAnalysisReport(null);
 
     try {
-      const requestPayload = {
-        transcript: textToAnalyze,
-        checklist: activeChecklist,
-        language: "ru",
-        source: activeTab,
-      };
+      const isAdvanced = activeChecklist.type === "advanced";
+      
+      if (isAdvanced) {
+        const requestPayload = {
+          transcript: textToAnalyze,
+          checklistId: activeChecklist.id,
+          language: "ru",
+          source: activeTab,
+        };
 
-      const response = await fetch(buildApiUrl("/api/analyze"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestPayload),
-      });
+        const response = await fetch(buildApiUrl("/api/advanced-checklists/analyze"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestPayload),
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Ошибка анализа" }));
-        throw new Error(errorData.error || "Ошибка при анализе");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: "Ошибка анализа" }));
+          throw new Error(errorData.error || "Ошибка при анализе");
+        }
+
+        const data = await response.json();
+        setAnalysisReport(data);
+      } else {
+        const requestPayload = {
+          transcript: textToAnalyze,
+          checklist: activeChecklist,
+          language: "ru",
+          source: activeTab,
+        };
+
+        const response = await fetch(buildApiUrl("/api/analyze"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestPayload),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: "Ошибка анализа" }));
+          throw new Error(errorData.error || "Ошибка при анализе");
+        }
+
+        const data = await response.json();
+        setAnalysisReport(data);
       }
-
-      const data = await response.json();
-      setAnalysisReport(data);
       
       toast({
         title: "Анализ завершён",
@@ -237,7 +269,11 @@ export default function Home() {
                   </Card>
                 }
               >
-                <AnalysisResults report={analysisReport} />
+                {"stages" in analysisReport ? (
+                  <AdvancedChecklistResults report={analysisReport} />
+                ) : (
+                  <AnalysisResults report={analysisReport} />
+                )}
               </Suspense>
             )}
           </div>
