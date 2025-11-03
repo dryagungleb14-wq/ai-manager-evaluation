@@ -40,10 +40,19 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
   const { toast } = useToast();
   const dropdown = useDropdownController("checklist-selector");
 
-  // Fetch checklists from API
-  const { data: checklists = [], isLoading } = useQuery<Checklist[]>({
+  // Fetch simple checklists from API
+  const { data: simpleChecklists = [], isLoading: isLoadingSimple } = useQuery<Checklist[]>({
     queryKey: ["/api/checklists"],
   });
+
+  // Fetch advanced checklists from API
+  const { data: advancedChecklists = [], isLoading: isLoadingAdvanced } = useQuery<Checklist[]>({
+    queryKey: ["/api/advanced-checklists"],
+  });
+
+  // Combine both types of checklists
+  const checklists = [...simpleChecklists, ...advancedChecklists];
+  const isLoading = isLoadingSimple || isLoadingAdvanced;
 
   // Create checklist mutation
   const createChecklistMutation = useMutation<Checklist, Error, InsertChecklist>({
