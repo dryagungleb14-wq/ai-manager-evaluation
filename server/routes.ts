@@ -5,9 +5,10 @@ import fs from "fs";
 import { storage, type StoredAnalysis } from "./storage.js";
 import { transcribeAudio } from "./services/whisper.js";
 import { analyzeConversation } from "./services/gemini-analyzer.js";
+import { analyzeAdvancedChecklist } from "./services/advanced-gemini-analyzer.js";
 import { generateMarkdownReport } from "./services/markdown-generator.js";
 import { generatePDFReport } from "./services/pdf-generator.js";
-import { parseChecklist } from "./services/checklist-parser.js";
+import { parseChecklist, parseAdvancedChecklist, detectChecklistTypeFromFile } from "./services/checklist-parser.js";
 import { checklistSchema, analyzeRequestSchema, insertManagerSchema } from "./shared/schema.js";
 import { GeminiServiceError } from "./services/gemini-client.js";
 
@@ -267,17 +268,148 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(400).json({ error: "Файл не загружен" });
       }
 
-      // Parse checklist from file
-      const checklist = await parseChecklist(req.file);
+      // Detect checklist type
+      const checklistType = detectChecklistTypeFromFile(req.file);
 
-      // Save parsed checklist to database
-      const created = await storage.createChecklist(checklist);
-      
-      res.status(201).json(created);
+      if (checklistType === "advanced") {
+        // Parse as advanced checklist
+        const checklist = await parseAdvancedChecklist(req.file);
+        const created = await storage.createAdvancedChecklist(checklist);
+        
+        return res.status(201).json({ ...created, type: "advanced" });
+      } else {
+        // Parse as simple checklist
+        const checklist = await parseChecklist(req.file);
+        const created = await storage.createChecklist(checklist);
+        
+        return res.status(201).json({ ...created, type: "simple" });
+      }
     } catch (error) {
       console.error("Upload checklist error:", error);
       res.status(500).json({
         error: error instanceof Error ? error.message : "Ошибка загрузки чек-листа",
+      });
+    }
+  });
+
+  // ============================================
+  // Advanced Checklist Routes
+  // ============================================
+
+  // GET /api/advanced-checklists - Получить все продвинутые чек-листы
+  app.get("/api/advanced-checklists", async (req, res) => {
+    try {
+      const checklists = await storage.getAdvancedChecklists();
+      res.json(checklists);
+    } catch (error) {
+      console.error("Get advanced checklists error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Ошибка получения чек-листов",
+      });
+    }
+  });
+
+  // GET /api/advanced-checklists/:id - Получить продвинутый чек-лист по ID
+  app.get("/api/advanced-checklists/:id", async (req, res) => {
+    try {
+      const checklist = await storage.getAdvancedChecklistWithStages(req.params.id);
+      if (!checklist) {
+        return res.status(404).json({ error: "Чек-лист не найден" });
+      }
+      res.json(checklist);
+    } catch (error) {
+      console.error("Get advanced checklist error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Ошибка получения чек-листа",
+      });
+    }
+  });
+
+  // POST /api/advanced-checklists/analyze - Анализ с использованием продвинутого чек-листа
+  app.post("/api/advanced-checklists/analyze", async (req, res) => {
+    try {
+      const { transcript, checklistId, language = "ru", managerId, source = "call" } = req.body;
+
+      if (!transcript || !checklistId) {
+        return res.status(400).json({ error: "Требуются transcript и checklistId" });
+      }
+
+      // Get checklist
+      const checklist = await storage.getAdvancedChecklistWithStages(checklistId);
+      if (!checklist) {
+        return res.status(404).json({ error: "Чек-лист не найден" });
+      }
+
+      // Extract text from transcript if it's an object
+      let textToAnalyze = transcript;
+      if (typeof transcript === "object" && "segments" in transcript) {
+        textToAnalyze = transcript.segments.map((s: any) => s.text).join(" ");
+      }
+
+      // Analyze with advanced checklist
+      const result = await analyzeAdvancedChecklist(
+        textToAnalyze,
+        checklist,
+        source,
+        language
+      );
+
+      // Save analysis
+      const analysisId = await storage.saveAdvancedAnalysis(
+        result,
+        checklistId,
+        textToAnalyze,
+        managerId,
+        source,
+        language
+      );
+
+      res.json({
+        ...result,
+        id: analysisId,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Ошибка анализа";
+      console.error("Advanced analysis error:", message);
+
+      if (error instanceof GeminiServiceError) {
+        return res.status(error.statusCode).json({
+          error: message,
+          code: error.code,
+        });
+      }
+
+      res.status(500).json({
+        error: message,
+      });
+    }
+  });
+
+  // GET /api/advanced-analyses - Получить историю продвинутых анализов
+  app.get("/api/advanced-analyses", async (req, res) => {
+    try {
+      const analyses = await storage.getAllAdvancedAnalyses();
+      res.json(analyses);
+    } catch (error) {
+      console.error("Get advanced analyses error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Ошибка получения анализов",
+      });
+    }
+  });
+
+  // GET /api/advanced-analyses/:id - Получить продвинутый анализ по ID
+  app.get("/api/advanced-analyses/:id", async (req, res) => {
+    try {
+      const analysis = await storage.getAdvancedAnalysis(req.params.id);
+      if (!analysis) {
+        return res.status(404).json({ error: "Анализ не найден" });
+      }
+      res.json(analysis);
+    } catch (error) {
+      console.error("Get advanced analysis error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Ошибка получения анализа",
       });
     }
   });

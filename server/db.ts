@@ -51,6 +51,58 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       FOREIGN KEY (checklist_id) REFERENCES checklists(id),
       FOREIGN KEY (manager_id) REFERENCES managers(id)
     );
+
+    CREATE TABLE IF NOT EXISTS advanced_checklists (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      version TEXT NOT NULL,
+      total_score INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS checklist_stages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      checklist_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      "order" INTEGER NOT NULL,
+      FOREIGN KEY (checklist_id) REFERENCES advanced_checklists(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS checklist_criteria (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      stage_id INTEGER NOT NULL,
+      number TEXT,
+      title TEXT NOT NULL,
+      description TEXT,
+      weight INTEGER NOT NULL,
+      is_binary INTEGER DEFAULT 0,
+      levels TEXT,
+      FOREIGN KEY (stage_id) REFERENCES checklist_stages(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS checklist_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      checklist_id INTEGER NOT NULL,
+      action TEXT NOT NULL,
+      changes TEXT,
+      user_id TEXT,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (checklist_id) REFERENCES advanced_checklists(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS advanced_analyses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      checklist_id INTEGER,
+      manager_id INTEGER,
+      source TEXT NOT NULL CHECK (source IN ('call', 'correspondence')),
+      language TEXT NOT NULL DEFAULT 'ru',
+      transcript TEXT NOT NULL,
+      report TEXT NOT NULL,
+      analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (checklist_id) REFERENCES advanced_checklists(id),
+      FOREIGN KEY (manager_id) REFERENCES managers(id)
+    );
   `);
 
   return client;

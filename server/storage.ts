@@ -1,5 +1,19 @@
 // Integration: blueprint:javascript_database
-import { Checklist, AnalysisReport, Manager, checklists, analyses, managers } from "./shared/schema.js";
+import { 
+  Checklist, 
+  AnalysisReport, 
+  Manager, 
+  checklists, 
+  analyses, 
+  managers,
+  AdvancedChecklist,
+  AdvancedChecklistReport,
+  advancedChecklists,
+  checklistStages,
+  checklistCriteria,
+  checklistHistory,
+  advancedAnalyses,
+} from "./shared/schema.js";
 import { eq, desc } from "drizzle-orm";
 import { getDatabase, type DatabaseClient } from "./db.js";
 
@@ -15,6 +29,17 @@ export type StoredAnalysis = {
   objectionsReport: AnalysisReport["objectionsReport"];
 };
 
+export type StoredAdvancedAnalysis = {
+  id: string;
+  checklistId?: string;
+  managerId?: string;
+  source: "call" | "correspondence";
+  language: string;
+  transcript: string;
+  analyzedAt: Date;
+  report: AdvancedChecklistReport;
+};
+
 let databaseClient: DatabaseClient | null = null;
 export let storageInitializationError: Error | null = null;
 export let storageUsesDatabase = false;
@@ -27,14 +52,22 @@ export interface IStorage {
   updateManager(id: string, manager: Partial<Omit<Manager, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Manager | undefined>;
   deleteManager(id: string): Promise<boolean>;
   
-  // Checklists
+  // Checklists (simple)
   getChecklists(): Promise<Checklist[]>;
   getChecklist(id: string): Promise<Checklist | undefined>;
   createChecklist(checklist: Checklist): Promise<Checklist>;
   updateChecklist(id: string, checklist: Checklist): Promise<Checklist | undefined>;
   deleteChecklist(id: string): Promise<boolean>;
   
-  // Analysis history
+  // Advanced Checklists
+  getAdvancedChecklists(): Promise<AdvancedChecklist[]>;
+  getAdvancedChecklist(id: string): Promise<AdvancedChecklist | undefined>;
+  getAdvancedChecklistWithStages(id: string): Promise<AdvancedChecklist | undefined>;
+  createAdvancedChecklist(checklist: AdvancedChecklist): Promise<AdvancedChecklist>;
+  updateAdvancedChecklist(id: string, checklist: AdvancedChecklist): Promise<AdvancedChecklist | undefined>;
+  deleteAdvancedChecklist(id: string): Promise<boolean>;
+  
+  // Analysis history (simple)
   saveAnalysis(
     analysis: AnalysisReport, 
     checklistId?: string, 
@@ -44,6 +77,19 @@ export interface IStorage {
   getAnalysis(id: string): Promise<AnalysisReport | undefined>;
   getAllAnalyses(): Promise<StoredAnalysis[]>;
   deleteAnalysis(id: string): Promise<boolean>;
+  
+  // Advanced Analysis history
+  saveAdvancedAnalysis(
+    report: AdvancedChecklistReport,
+    checklistId?: string,
+    transcript?: string,
+    managerId?: string,
+    source?: "call" | "correspondence",
+    language?: string
+  ): Promise<string>;
+  getAdvancedAnalysis(id: string): Promise<AdvancedChecklistReport | undefined>;
+  getAllAdvancedAnalyses(): Promise<StoredAdvancedAnalysis[]>;
+  deleteAdvancedAnalysis(id: string): Promise<boolean>;
 }
 
 export let storage: IStorage;
@@ -351,18 +397,336 @@ export class DatabaseStorage implements IStorage {
 
     return result.length > 0;
   }
+
+  // Advanced Checklist methods
+  async getAdvancedChecklists(): Promise<AdvancedChecklist[]> {
+    const dbChecklists = await this.db.select().from(advancedChecklists);
+    
+    const results: AdvancedChecklist[] = [];
+    for (const checklist of dbChecklists) {
+      const stages = await this.db
+        .select()
+        .from(checklistStages)
+        .where(eq(checklistStages.checklistId, checklist.id));
+      
+      const stagesWithCriteria = await Promise.all(
+        stages.map(async (stage: any) => {
+          const criteria = await this.db
+            .select()
+            .from(checklistCriteria)
+            .where(eq(checklistCriteria.stageId, stage.id));
+          
+          return {
+            id: stage.id.toString(),
+            name: stage.name,
+            order: stage.order,
+            criteria: criteria.map((c: any) => ({
+              id: c.id.toString(),
+              number: c.number || "",
+              title: c.title,
+              description: c.description || "",
+              weight: c.weight,
+              isBinary: c.isBinary || false,
+              ...(c.levels || {}),
+            })),
+          };
+        })
+      );
+      
+      results.push({
+        id: checklist.id.toString(),
+        name: checklist.name,
+        version: checklist.version,
+        type: "advanced",
+        totalScore: checklist.totalScore,
+        stages: stagesWithCriteria,
+        createdAt: checklist.createdAt,
+        updatedAt: checklist.updatedAt,
+      });
+    }
+    
+    return results;
+  }
+
+  async getAdvancedChecklist(id: string): Promise<AdvancedChecklist | undefined> {
+    const numId = parseInt(id, 10);
+    if (isNaN(numId)) return undefined;
+
+    const [checklist] = await this.db
+      .select()
+      .from(advancedChecklists)
+      .where(eq(advancedChecklists.id, numId));
+
+    if (!checklist) return undefined;
+
+    return {
+      id: checklist.id.toString(),
+      name: checklist.name,
+      version: checklist.version,
+      type: "advanced",
+      totalScore: checklist.totalScore,
+      stages: [],
+      createdAt: checklist.createdAt,
+      updatedAt: checklist.updatedAt,
+    };
+  }
+
+  async getAdvancedChecklistWithStages(id: string): Promise<AdvancedChecklist | undefined> {
+    const numId = parseInt(id, 10);
+    if (isNaN(numId)) return undefined;
+
+    const [checklist] = await this.db
+      .select()
+      .from(advancedChecklists)
+      .where(eq(advancedChecklists.id, numId));
+
+    if (!checklist) return undefined;
+
+    const stages = await this.db
+      .select()
+      .from(checklistStages)
+      .where(eq(checklistStages.checklistId, checklist.id));
+    
+    const stagesWithCriteria = await Promise.all(
+      stages.map(async (stage: any) => {
+        const criteria = await this.db
+          .select()
+          .from(checklistCriteria)
+          .where(eq(checklistCriteria.stageId, stage.id));
+        
+        return {
+          id: stage.id.toString(),
+          name: stage.name,
+          order: stage.order,
+          criteria: criteria.map((c: any) => ({
+            id: c.id.toString(),
+            number: c.number || "",
+            title: c.title,
+            description: c.description || "",
+            weight: c.weight,
+            isBinary: c.isBinary || false,
+            ...(c.levels || {}),
+          })),
+        };
+      })
+    );
+
+    return {
+      id: checklist.id.toString(),
+      name: checklist.name,
+      version: checklist.version,
+      type: "advanced",
+      totalScore: checklist.totalScore,
+      stages: stagesWithCriteria,
+      createdAt: checklist.createdAt,
+      updatedAt: checklist.updatedAt,
+    };
+  }
+
+  async createAdvancedChecklist(checklist: AdvancedChecklist): Promise<AdvancedChecklist> {
+    const [created] = await this.db
+      .insert(advancedChecklists)
+      .values({
+        name: checklist.name,
+        version: checklist.version,
+        totalScore: checklist.totalScore,
+      })
+      .returning();
+
+    // Create stages and criteria
+    for (const stage of checklist.stages) {
+      const [createdStage] = await this.db
+        .insert(checklistStages)
+        .values({
+          checklistId: created.id,
+          name: stage.name,
+          order: stage.order,
+        })
+        .returning();
+
+      for (const criterion of stage.criteria) {
+        await this.db
+          .insert(checklistCriteria)
+          .values({
+            stageId: createdStage.id,
+            number: criterion.number,
+            title: criterion.title,
+            description: criterion.description,
+            weight: criterion.weight,
+            isBinary: criterion.isBinary || false,
+            levels: {
+              max: criterion.max,
+              mid: criterion.mid,
+              min: criterion.min,
+            },
+          });
+      }
+    }
+
+    // Record history
+    await this.db
+      .insert(checklistHistory)
+      .values({
+        checklistId: created.id,
+        action: "created",
+        changes: null,
+        userId: null,
+      });
+
+    return this.getAdvancedChecklistWithStages(created.id.toString()) as Promise<AdvancedChecklist>;
+  }
+
+  async updateAdvancedChecklist(id: string, checklist: AdvancedChecklist): Promise<AdvancedChecklist | undefined> {
+    const numId = parseInt(id, 10);
+    if (isNaN(numId)) return undefined;
+
+    const [updated] = await this.db
+      .update(advancedChecklists)
+      .set({
+        name: checklist.name,
+        version: checklist.version,
+        totalScore: checklist.totalScore,
+        updatedAt: new Date(),
+      })
+      .where(eq(advancedChecklists.id, numId))
+      .returning();
+
+    if (!updated) return undefined;
+
+    // Record history
+    await this.db
+      .insert(checklistHistory)
+      .values({
+        checklistId: updated.id,
+        action: "updated",
+        changes: { name: checklist.name, version: checklist.version },
+        userId: null,
+      });
+
+    return this.getAdvancedChecklistWithStages(updated.id.toString());
+  }
+
+  async deleteAdvancedChecklist(id: string): Promise<boolean> {
+    const numId = parseInt(id, 10);
+    if (isNaN(numId)) return false;
+
+    // Record history before deletion
+    await this.db
+      .insert(checklistHistory)
+      .values({
+        checklistId: numId,
+        action: "deleted",
+        changes: null,
+        userId: null,
+      });
+
+    const result = await this.db
+      .delete(advancedChecklists)
+      .where(eq(advancedChecklists.id, numId))
+      .returning();
+
+    return result.length > 0;
+  }
+
+  async saveAdvancedAnalysis(
+    report: AdvancedChecklistReport,
+    checklistId?: string,
+    transcript?: string,
+    managerId?: string,
+    source: "call" | "correspondence" = "call",
+    language: string = "ru"
+  ): Promise<string> {
+    let numericChecklistId: number | null = null;
+    if (checklistId) {
+      const parsed = parseInt(checklistId, 10);
+      if (!isNaN(parsed)) {
+        numericChecklistId = parsed;
+      }
+    }
+
+    let numericManagerId: number | null = null;
+    if (managerId) {
+      const parsed = parseInt(managerId, 10);
+      if (!isNaN(parsed)) {
+        numericManagerId = parsed;
+      }
+    }
+
+    const [saved] = await this.db
+      .insert(advancedAnalyses)
+      .values({
+        checklistId: numericChecklistId,
+        managerId: numericManagerId,
+        source,
+        language,
+        transcript: transcript || "",
+        report,
+      })
+      .returning();
+
+    return saved.id.toString();
+  }
+
+  async getAdvancedAnalysis(id: string): Promise<AdvancedChecklistReport | undefined> {
+    const numId = parseInt(id, 10);
+    if (isNaN(numId)) return undefined;
+
+    const [analysis] = await this.db
+      .select()
+      .from(advancedAnalyses)
+      .where(eq(advancedAnalyses.id, numId));
+
+    if (!analysis) return undefined;
+
+    return analysis.report;
+  }
+
+  async getAllAdvancedAnalyses(): Promise<StoredAdvancedAnalysis[]> {
+    const allAnalyses = await this.db
+      .select()
+      .from(advancedAnalyses)
+      .orderBy(desc(advancedAnalyses.analyzedAt))
+      .limit(10);
+
+    return allAnalyses.map((analysis: any) => ({
+      id: analysis.id.toString(),
+      checklistId: analysis.checklistId?.toString(),
+      managerId: analysis.managerId?.toString(),
+      source: analysis.source,
+      language: analysis.language,
+      transcript: analysis.transcript,
+      analyzedAt: analysis.analyzedAt,
+      report: analysis.report,
+    }));
+  }
+
+  async deleteAdvancedAnalysis(id: string): Promise<boolean> {
+    const numId = parseInt(id, 10);
+    if (isNaN(numId)) return false;
+
+    const result = await this.db
+      .delete(advancedAnalyses)
+      .where(eq(advancedAnalyses.id, numId))
+      .returning();
+
+    return result.length > 0;
+  }
 }
 
 class InMemoryStorage implements IStorage {
   private managerCounter = 1;
   private checklistCounter = 1;
   private analysisCounter = 1;
+  private advancedChecklistCounter = 1;
+  private advancedAnalysisCounter = 1;
   private readonly managersStore = new Map<string, Manager>();
   private readonly checklistsStore = new Map<string, Checklist>();
   private readonly analysesStore = new Map<
     string,
     StoredAnalysis & { transcript: string; report: AnalysisReport }
   >();
+  private readonly advancedChecklistsStore = new Map<string, AdvancedChecklist>();
+  private readonly advancedAnalysesStore = new Map<string, StoredAdvancedAnalysis>();
 
   async getManagers(): Promise<Manager[]> {
     return Array.from(this.managersStore.values()).map(manager => ({ ...manager }));
@@ -485,6 +849,86 @@ class InMemoryStorage implements IStorage {
 
   async deleteAnalysis(id: string): Promise<boolean> {
     return this.analysesStore.delete(id);
+  }
+
+  // Advanced Checklist methods for InMemoryStorage
+  async getAdvancedChecklists(): Promise<AdvancedChecklist[]> {
+    return Array.from(this.advancedChecklistsStore.values()).map(checklist => ({ ...checklist }));
+  }
+
+  async getAdvancedChecklist(id: string): Promise<AdvancedChecklist | undefined> {
+    const checklist = this.advancedChecklistsStore.get(id);
+    return checklist ? { ...checklist } : undefined;
+  }
+
+  async getAdvancedChecklistWithStages(id: string): Promise<AdvancedChecklist | undefined> {
+    return this.getAdvancedChecklist(id);
+  }
+
+  async createAdvancedChecklist(checklist: AdvancedChecklist): Promise<AdvancedChecklist> {
+    const id = checklist.id || String(this.advancedChecklistCounter++);
+    const now = new Date();
+    const stored: AdvancedChecklist = {
+      ...checklist,
+      id,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.advancedChecklistsStore.set(id, stored);
+    return { ...stored };
+  }
+
+  async updateAdvancedChecklist(id: string, checklist: AdvancedChecklist): Promise<AdvancedChecklist | undefined> {
+    if (!this.advancedChecklistsStore.has(id)) {
+      return undefined;
+    }
+    const stored: AdvancedChecklist = {
+      ...checklist,
+      id,
+      updatedAt: new Date(),
+    };
+    this.advancedChecklistsStore.set(id, stored);
+    return { ...stored };
+  }
+
+  async deleteAdvancedChecklist(id: string): Promise<boolean> {
+    return this.advancedChecklistsStore.delete(id);
+  }
+
+  async saveAdvancedAnalysis(
+    report: AdvancedChecklistReport,
+    checklistId?: string,
+    transcript?: string,
+    managerId?: string,
+    source: "call" | "correspondence" = "call",
+    language: string = "ru"
+  ): Promise<string> {
+    const id = String(this.advancedAnalysisCounter++);
+    const stored: StoredAdvancedAnalysis = {
+      id,
+      checklistId,
+      managerId,
+      source,
+      language,
+      transcript: transcript || "",
+      analyzedAt: new Date(),
+      report,
+    };
+    this.advancedAnalysesStore.set(id, stored);
+    return id;
+  }
+
+  async getAdvancedAnalysis(id: string): Promise<AdvancedChecklistReport | undefined> {
+    const stored = this.advancedAnalysesStore.get(id);
+    return stored ? stored.report : undefined;
+  }
+
+  async getAllAdvancedAnalyses(): Promise<StoredAdvancedAnalysis[]> {
+    return Array.from(this.advancedAnalysesStore.values()).map(analysis => ({ ...analysis }));
+  }
+
+  async deleteAdvancedAnalysis(id: string): Promise<boolean> {
+    return this.advancedAnalysesStore.delete(id);
   }
 }
 

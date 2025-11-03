@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { Request } from "express";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
-import type { Checklist, ChecklistItemType } from "../shared/schema.js";
+import type { Checklist, ChecklistItemType, AdvancedChecklist, ChecklistStage, ChecklistCriterion, CriterionLevel } from "../shared/schema.js";
 import { executeGeminiRequest, getGeminiClient } from "./gemini-client.js";
 
 type UploadFile = Express.Multer.File | { originalname?: string; buffer?: Buffer };
@@ -383,4 +383,223 @@ export async function parseChecklistFromRequest(req: Request): Promise<Checklist
   if (file) return parseChecklist(file);
   if (body) return parseChecklist(body);
   throw new Error("Checklist not provided (file or body.checklist)");
+}
+
+// ============================================
+// Advanced Checklist Parsing
+// ============================================
+
+export function detectChecklistType(headers: string[]): "simple" | "advanced" {
+  const hasStages = headers.some(h => 
+    h.toLowerCase().includes("этап") || 
+    h.toLowerCase().includes("stage")
+  );
+  const hasLevels = headers.some(h => 
+    h.includes("MAX") || 
+    h.includes("MID") || 
+    h.includes("MIN")
+  );
+  
+  return (hasStages || hasLevels) ? "advanced" : "simple";
+}
+
+function parseAdvancedExcel(buffer: Buffer, filename: string): AdvancedChecklist {
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
+  
+  if (rows.length === 0) {
+    throw new Error("Excel file is empty");
+  }
+  
+  const stages = new Map<string, ChecklistCriterion[]>();
+  let totalScore = 0;
+  
+  for (const row of rows) {
+    const stageName = row["Этап"] || row["Stage"] || "Общие";
+    const criterionNumber = row["№"] || row[""] || "";
+    const description = row["Описание этапа"] || row["Description"] || "";
+    const weight = Number(row["Балл"]) || 0;
+    
+    const criterion: ChecklistCriterion = {
+      id: `criterion-${criterionNumber || randomUUID()}`,
+      number: String(criterionNumber),
+      title: description.substring(0, 50) || criterionNumber,
+      description,
+      weight,
+    };
+    
+    // Parse MAX/MID/MIN levels
+    if (row["MAX Критерий"] || row["MAX"]) {
+      const maxDesc = row["MAX Критерий"] || row["MAX"] || "";
+      const maxScore = Number(row["Балл__1"]) || weight;
+      if (maxDesc) {
+        criterion.max = {
+          description: maxDesc,
+          score: maxScore,
+        };
+      }
+    }
+    
+    if (row["MID Критерий"] || row["MID"]) {
+      const midDesc = row["MID Критерий"] || row["MID"] || "";
+      const midScore = Number(row["Балл__2"]) || Math.floor(weight / 2);
+      if (midDesc) {
+        criterion.mid = {
+          description: midDesc,
+          score: midScore,
+        };
+      }
+    }
+    
+    if (row["MIN Критерий"] || row["MIN"]) {
+      const minDesc = row["MIN Критерий"] || row["MIN"] || "";
+      const minScore = Number(row["Балл__3"]) || 0;
+      if (minDesc) {
+        criterion.min = {
+          description: minDesc,
+          score: minScore,
+        };
+      }
+    }
+    
+    // Group by stages
+    if (!stages.has(stageName)) {
+      stages.set(stageName, []);
+    }
+    stages.get(stageName)!.push(criterion);
+    totalScore += weight;
+  }
+  
+  // Form the structure
+  const checklistStages: ChecklistStage[] = Array.from(stages.entries()).map(
+    ([name, criteria], index) => ({
+      id: `stage-${index}`,
+      name,
+      order: index,
+      criteria,
+    })
+  );
+  
+  return {
+    id: randomUUID(),
+    name: filename.replace(/\.(xlsx?|csv)$/i, ""),
+    version: "1.0",
+    type: "advanced",
+    totalScore,
+    stages: checklistStages,
+  };
+}
+
+async function parseAdvancedTextWithAI(content: string, filename: string): Promise<AdvancedChecklist> {
+  const geminiClient = getGeminiClient();
+  
+  const prompt = `Ты эксперт по анализу чек-листов. Преобразуй этот чек-лист в JSON.
+
+СТРУКТУРА:
+{
+  "name": "Название",
+  "totalScore": 100,
+  "stages": [
+    {
+      "name": "Этап 1",
+      "criteria": [
+        {
+          "number": "1.1",
+          "title": "Краткое название",
+          "description": "Полное описание",
+          "weight": 5,
+          "max": { "description": "Идеально выполнено", "score": 5 },
+          "mid": { "description": "Средне", "score": 2 },
+          "min": { "description": "Плохо", "score": 0 }
+        }
+      ]
+    }
+  ]
+}
+
+ЧЕК-ЛИСТ:
+${content}
+
+Верни ТОЛЬКО валидный JSON без дополнительных комментариев.`;
+
+  const response = await executeGeminiRequest(() =>
+    geminiClient.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: prompt }],
+        },
+      ],
+      config: { responseMimeType: "application/json" },
+    }),
+  );
+  
+  const responseText = response.text;
+  if (!responseText) {
+    throw new Error("Gemini вернул пустой ответ при парсинге чек-листа");
+  }
+  
+  const parsed = safeParseJSON<any>(responseText);
+  return {
+    id: randomUUID(),
+    type: "advanced",
+    name: parsed.name || filename.replace(/\.(txt|md)$/i, ""),
+    version: parsed.version || "1.0",
+    totalScore: parsed.totalScore || 100,
+    stages: parsed.stages || [],
+  };
+}
+
+export async function parseAdvancedChecklist(file: UploadFile): Promise<AdvancedChecklist> {
+  if (!file || !file.buffer) {
+    throw new Error("Advanced checklist file buffer is empty");
+  }
+
+  const filename = file.originalname ?? "checklist";
+  const ext = path.extname(filename).toLowerCase();
+
+  if (TEXTUAL_EXTENSIONS.has(ext)) {
+    const content = file.buffer.toString("utf8");
+    return parseAdvancedTextWithAI(content, filename);
+  }
+
+  if (EXCEL_EXTENSIONS.has(ext) || CSV_EXTENSIONS.has(ext)) {
+    return parseAdvancedExcel(file.buffer, filename);
+  }
+
+  throw new Error("Unsupported file format for advanced checklist");
+}
+
+export function detectChecklistTypeFromFile(file: UploadFile): "simple" | "advanced" {
+  if (!file || !file.buffer) {
+    return "simple";
+  }
+
+  const filename = file.originalname ?? "checklist";
+  const ext = path.extname(filename).toLowerCase();
+
+  // Text files require AI analysis, default to simple unless we parse them
+  if (TEXTUAL_EXTENSIONS.has(ext)) {
+    return "simple"; // Will be determined after parsing
+  }
+
+  // For Excel/CSV, check headers
+  if (EXCEL_EXTENSIONS.has(ext) || CSV_EXTENSIONS.has(ext)) {
+    try {
+      const workbook = XLSX.read(file.buffer, { type: "buffer" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
+      
+      if (rows.length > 0) {
+        const headers = Object.keys(rows[0]);
+        return detectChecklistType(headers);
+      }
+    } catch (error) {
+      console.error("Error detecting checklist type:", error);
+    }
+  }
+
+  return "simple";
 }
