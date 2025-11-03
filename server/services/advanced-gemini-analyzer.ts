@@ -117,6 +117,13 @@ ${JSON.stringify(checklistData, null, 2)}
     };
   } catch (error) {
     if (error instanceof GeminiServiceError) throw error;
+    if (error instanceof SyntaxError) {
+      throw new GeminiServiceError(
+        "Ошибка парсинга ответа от Gemini - некорректный JSON",
+        502,
+        "gemini_parse_error",
+      );
+    }
     const message = error instanceof Error ? error.message : "Неизвестная ошибка";
     console.error("Gemini advanced analysis error:", message);
     throw new GeminiServiceError(
