@@ -4,6 +4,9 @@ import type { AdvancedChecklist } from "../shared/schema.js";
  * Чек-лист "До пробного этапа"
  * Детализированный чек-лист для оценки качества работы менеджера на этапе до пробного периода
  * с использованием системы оценки MAX/MID/MIN
+ * 
+ * NOTE: This file is intentionally duplicated in client/src/data/pre-trial-checklist.ts
+ * for simplicity in the MVP. In a production system, this should be moved to a shared package.
  */
 export const preTrialChecklist: AdvancedChecklist = {
   id: "pre-trial-checklist",

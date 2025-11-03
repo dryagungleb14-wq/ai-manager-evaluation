@@ -27,6 +27,14 @@ import { useDropdownController } from "@/contexts/dropdown-provider";
 // Union type for both simple and advanced checklists
 type AnyChecklist = Checklist | AdvancedChecklist;
 
+// Type guard to check if a checklist is a simple checklist
+function isSimpleChecklist(checklist: AnyChecklist): checklist is Checklist {
+  return 'items' in checklist;
+}
+
+// Feature flag: Temporarily disable checklist upload/edit/management UI
+const ENABLE_CHECKLIST_MANAGEMENT = false;
+
 const ChecklistUpload = lazy(() =>
   import("@/components/checklist-upload").then((module) => ({
     default: module.ChecklistUpload,
@@ -94,7 +102,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
       setActiveId(active);
       localStorage.setItem("manager-eval-active-checklist", active);
       const checklist = checklists.find((c) => c.id === active);
-      if (checklist && 'items' in checklist) {
+      if (checklist && isSimpleChecklist(checklist)) {
         onChecklistChange(checklist);
       }
     }
@@ -107,7 +115,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
     if (checklist) {
       // Only call onChecklistChange for simple checklists
       // Advanced checklists are displayed but not yet supported for analysis
-      if ('items' in checklist) {
+      if (isSimpleChecklist(checklist)) {
         onChecklistChange(checklist);
       }
     }
@@ -159,7 +167,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
 
   const handleDuplicate = async () => {
     const checklist = checklists.find((c) => c.id === activeId);
-    if (!checklist || !('items' in checklist)) return;
+    if (!checklist || !isSimpleChecklist(checklist)) return;
 
     // Create payload without ID (server will generate it)
     const { id, ...baseChecklist } = checklist;
@@ -231,7 +239,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
           </Select>
 
           {/* Temporarily hidden: Upload, Duplicate, Export, Import buttons */}
-          {false && (
+          {ENABLE_CHECKLIST_MANAGEMENT && (
             <div className="flex flex-wrap gap-2">
               <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
                 <DialogTrigger asChild>
@@ -299,7 +307,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
 
           {activeChecklist && (
             <div className="space-y-3 pt-2">
-              {'items' in activeChecklist ? (
+              {isSimpleChecklist(activeChecklist) ? (
                 <>
                   <div className="text-sm text-muted-foreground">
                     Пунктов: {activeChecklist.items.length}
