@@ -21,8 +21,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Checklist, InsertChecklist } from "@/lib/rest";
+import { Checklist, InsertChecklist, AdvancedChecklist } from "@/lib/rest";
 import { useDropdownController } from "@/contexts/dropdown-provider";
+
+// Union type for both simple and advanced checklists
+type AnyChecklist = Checklist | AdvancedChecklist;
+
+// Type guard to check if a checklist is a simple checklist
+function isSimpleChecklist(checklist: AnyChecklist): checklist is Checklist {
+  return 'items' in checklist;
+}
+
+// Feature flag: Temporarily disable checklist upload/edit/management UI
+const ENABLE_CHECKLIST_MANAGEMENT = false;
 
 const ChecklistUpload = lazy(() =>
   import("@/components/checklist-upload").then((module) => ({
@@ -40,10 +51,19 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
   const { toast } = useToast();
   const dropdown = useDropdownController("checklist-selector");
 
-  // Fetch checklists from API
-  const { data: checklists = [], isLoading } = useQuery<Checklist[]>({
+  // Fetch simple checklists from API
+  const { data: simpleChecklists = [], isLoading: isLoadingSimple } = useQuery<Checklist[]>({
     queryKey: ["/api/checklists"],
   });
+
+  // Fetch advanced checklists from API
+  const { data: advancedChecklists = [], isLoading: isLoadingAdvanced } = useQuery<AdvancedChecklist[]>({
+    queryKey: ["/api/advanced-checklists"],
+  });
+
+  // Combine both types of checklists
+  const checklists: AnyChecklist[] = [...simpleChecklists, ...advancedChecklists];
+  const isLoading = isLoadingSimple || isLoadingAdvanced;
 
   // Create checklist mutation
   const createChecklistMutation = useMutation<Checklist, Error, InsertChecklist>({
@@ -82,7 +102,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
       setActiveId(active);
       localStorage.setItem("manager-eval-active-checklist", active);
       const checklist = checklists.find((c) => c.id === active);
-      if (checklist) {
+      if (checklist && isSimpleChecklist(checklist)) {
         onChecklistChange(checklist);
       }
     }
@@ -93,7 +113,11 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
     localStorage.setItem("manager-eval-active-checklist", value);
     const checklist = checklists.find((c) => c.id === value);
     if (checklist) {
-      onChecklistChange(checklist);
+      // Only call onChecklistChange for simple checklists
+      // Advanced checklists are displayed but not yet supported for analysis
+      if (isSimpleChecklist(checklist)) {
+        onChecklistChange(checklist);
+      }
     }
     dropdown.close();
   };
@@ -143,7 +167,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
 
   const handleDuplicate = async () => {
     const checklist = checklists.find((c) => c.id === activeId);
-    if (!checklist) return;
+    if (!checklist || !isSimpleChecklist(checklist)) return;
 
     // Create payload without ID (server will generate it)
     const { id, ...baseChecklist } = checklist;
@@ -214,108 +238,139 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
             </SelectContent>
           </Select>
 
-          <div className="flex flex-wrap gap-2">
-            <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="default"
-                  size="sm"
-                  data-testid="button-upload-checklist"
-                >
-                  <FileUp className="h-4 w-4 mr-2" />
-                  Загрузить файл
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>Загрузить чек-лист из файла</DialogTitle>
-                  <DialogDescription>
-                    Поддерживаются текстовые (TXT, MD) и табличные (CSV, Excel) форматы.
-                    AI автоматически поймёт структуру вашего чек-листа.
-                  </DialogDescription>
-                </DialogHeader>
-                <Suspense
-                  fallback={
-                    <div className="py-8 text-center text-sm text-muted-foreground">
-                      Загрузка формы загрузки...
-                    </div>
-                  }
-                >
-                  <ChecklistUpload onChecklistCreated={handleChecklistUploaded} />
-                </Suspense>
-              </DialogContent>
-            </Dialog>
+          {/* Temporarily hidden: Upload, Duplicate, Export, Import buttons */}
+          {ENABLE_CHECKLIST_MANAGEMENT && (
+            <div className="flex flex-wrap gap-2">
+              <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    data-testid="button-upload-checklist"
+                  >
+                    <FileUp className="h-4 w-4 mr-2" />
+                    Загрузить файл
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Загрузить чек-лист из файла</DialogTitle>
+                    <DialogDescription>
+                      Поддерживаются текстовые (TXT, MD) и табличные (CSV, Excel) форматы.
+                      AI автоматически поймёт структуру вашего чек-листа.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <Suspense
+                    fallback={
+                      <div className="py-8 text-center text-sm text-muted-foreground">
+                        Загрузка формы загрузки...
+                      </div>
+                    }
+                  >
+                    <ChecklistUpload onChecklistCreated={handleChecklistUploaded} />
+                  </Suspense>
+                </DialogContent>
+              </Dialog>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDuplicate}
-              disabled={!activeId || createChecklistMutation.isPending}
-              data-testid="button-duplicate-checklist"
-            >
-              <Copy className="h-4 w-4 mr-2" />
-              Дубликат
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExport}
-              disabled={!activeId}
-              data-testid="button-export-checklist"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Экспорт
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleImport}
-              disabled={createChecklistMutation.isPending}
-              data-testid="button-import-checklist"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Импорт JSON
-            </Button>
-          </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDuplicate}
+                disabled={!activeId || createChecklistMutation.isPending}
+                data-testid="button-duplicate-checklist"
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Дубликат
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={!activeId}
+                data-testid="button-export-checklist"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Экспорт
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleImport}
+                disabled={createChecklistMutation.isPending}
+                data-testid="button-import-checklist"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Импорт JSON
+              </Button>
+            </div>
+          )}
 
           {activeChecklist && (
             <div className="space-y-3 pt-2">
-              <div className="text-sm text-muted-foreground">
-                Пунктов: {activeChecklist.items.length}
-              </div>
-              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-                {activeChecklist.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-3 rounded-lg bg-card border border-card-border space-y-1"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-sm font-medium">{item.title}</span>
-                      <Badge
-                        variant={
-                          item.type === "mandatory"
-                            ? "default"
-                            : item.type === "recommended"
-                            ? "secondary"
-                            : "destructive"
-                        }
-                        className="text-xs shrink-0"
-                      >
-                        {item.type === "mandatory"
-                          ? "Обязательный"
-                          : item.type === "recommended"
-                          ? "Рекомендуемый"
-                          : "Запрещённый"}
-                      </Badge>
-                    </div>
-                    {item.criteria.llm_hint && (
-                      <p className="text-xs text-muted-foreground">
-                        {item.criteria.llm_hint}
-                      </p>
-                    )}
+              {isSimpleChecklist(activeChecklist) ? (
+                <>
+                  <div className="text-sm text-muted-foreground">
+                    Пунктов: {activeChecklist.items.length}
                   </div>
-                ))}
-              </div>
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+                    {activeChecklist.items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-3 rounded-lg bg-card border border-card-border space-y-1"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm font-medium">{item.title}</span>
+                          <Badge
+                            variant={
+                              item.type === "mandatory"
+                                ? "default"
+                                : item.type === "recommended"
+                                ? "secondary"
+                                : "destructive"
+                            }
+                            className="text-xs shrink-0"
+                          >
+                            {item.type === "mandatory"
+                              ? "Обязательный"
+                              : item.type === "recommended"
+                              ? "Рекомендуемый"
+                              : "Запрещённый"}
+                          </Badge>
+                        </div>
+                        {item.criteria.llm_hint && (
+                          <p className="text-xs text-muted-foreground">
+                            {item.criteria.llm_hint}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-sm text-muted-foreground">
+                    Этапов: {activeChecklist.stages.length} | Всего баллов: {activeChecklist.totalScore}
+                  </div>
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+                    {activeChecklist.stages.map((stage) => (
+                      <div
+                        key={stage.id}
+                        className="p-3 rounded-lg bg-card border border-card-border space-y-1"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm font-medium">{stage.name}</span>
+                          <Badge variant="secondary" className="text-xs shrink-0">
+                            {stage.criteria.length} критериев
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Баллов: {stage.criteria.reduce((sum, c) => sum + c.weight, 0)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </CardContent>

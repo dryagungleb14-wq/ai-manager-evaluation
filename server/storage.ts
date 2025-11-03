@@ -988,3 +988,16 @@ export async function seedDefaultChecklists(defaultChecklists: Checklist[]): Pro
     console.log(`Seeded ${defaultChecklists.length} default checklists`);
   }
 }
+
+// Seed function to initialize default advanced checklists
+export async function seedDefaultAdvancedChecklists(defaultAdvancedChecklists: AdvancedChecklist[]): Promise<void> {
+  const existing = await storage.getAdvancedChecklists();
+  
+  if (existing.length === 0) {
+    console.log("Seeding database with default advanced checklists...");
+    for (const checklist of defaultAdvancedChecklists) {
+      await storage.createAdvancedChecklist(checklist);
+    }
+    console.log(`Seeded ${defaultAdvancedChecklists.length} default advanced checklists`);
+  }
+}

@@ -7,10 +7,12 @@ import { setupVite, serveStatic, log } from "./vite-server.js";
 import { createAuthGuard } from "./auth-guard.js";
 import {
   seedDefaultChecklists,
+  seedDefaultAdvancedChecklists,
   seedDefaultManagers,
   storageInitializationError,
   storageUsesDatabase,
 } from "./storage.js";
+import { preTrialChecklist } from "./data/pre-trial-checklist.js";
 import type { CorsOptions } from "./types/cors-options";
 
 const app = express();
@@ -346,6 +348,7 @@ app.use((req, res, next) => {
   ];
 
   await seedDefaultChecklists(defaultChecklists);
+  await seedDefaultAdvancedChecklists([preTrialChecklist]);
   await seedDefaultManagers();
   
   await registerRoutes(app);
