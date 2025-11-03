@@ -70,6 +70,7 @@ export function ManagerSelector({ onManagerChange, selectedManagerId }: ManagerS
           </SelectTrigger>
           <SelectContent
             position="popper"
+            side="top"
             sideOffset={6}
             align="start"
             className="z-50"
