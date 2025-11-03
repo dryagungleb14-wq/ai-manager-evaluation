@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction, type RequestHandler } from "express";
+import cors from "cors";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { registerRoutes } from "./routes.js";
@@ -19,8 +20,6 @@ type OriginMatcher = string | RegExp;
 const DEFAULT_ALLOWED_ORIGINS: OriginMatcher[] = [
   /^https:\/\/([a-z0-9-]+-)*[a-z0-9-]+\.vercel\.app$/i,
 ];
-
-let corsFactoryPromise: Promise<(options?: CorsOptions) => RequestHandler> | null = null;
 
 let serviceVersion =
   process.env.APP_VERSION?.trim()
@@ -109,49 +108,6 @@ function originMatches(origin: string, matchers: OriginMatcher[]): boolean {
   });
 }
 
-async function loadCorsFactory(): Promise<(options?: CorsOptions) => RequestHandler> {
-  if (!corsFactoryPromise) {
-    corsFactoryPromise = (async () => {
-      const corsModule = await import("cors");
-      const factory = (corsModule as { default?: (options?: CorsOptions) => RequestHandler }).default
-        ?? (corsModule as unknown as (options?: CorsOptions) => RequestHandler);
-
-      return factory;
-    })();
-  }
-
-  try {
-    return await corsFactoryPromise;
-  } catch (error) {
-    corsFactoryPromise = null;
-    throw error;
-  }
-}
-
-function buildFallbackCorsMiddleware(matchers: OriginMatcher[], allowAll: boolean): RequestHandler {
-  return (req, res, next) => {
-    const requestOrigin = req.headers.origin;
-
-    if (allowAll) {
-      res.setHeader("Access-Control-Allow-Origin", "*");
-    } else if (requestOrigin && originMatches(requestOrigin, matchers)) {
-      res.setHeader("Access-Control-Allow-Origin", requestOrigin);
-      res.setHeader("Vary", "Origin");
-    }
-
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-
-    if (req.method === "OPTIONS") {
-      res.status(204).end();
-      return;
-    }
-
-    next();
-  };
-}
-
 async function ensureServiceVersionLoaded(): Promise<void> {
   if (serviceVersion && serviceVersion !== "unknown") {
     return;
@@ -171,47 +127,39 @@ async function ensureServiceVersionLoaded(): Promise<void> {
   }
 }
 
-async function createCorsMiddleware(originSetting: string | undefined): Promise<RequestHandler> {
+function createCorsMiddleware(originSetting: string | undefined): RequestHandler {
   const { allowAll, matchers } = buildOriginConfig(originSetting);
 
-  try {
-    const corsFactory = await loadCorsFactory();
-    const baseOptions: CorsOptions = {
-      credentials: true,
-      methods: ["GET", "POST", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
-      optionsSuccessStatus: 204,
-    };
+  const baseOptions: CorsOptions = {
+    credentials: true,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    optionsSuccessStatus: 204,
+  };
 
-    if (allowAll) {
-      return corsFactory({
-        ...baseOptions,
-        origin: true,
-      });
-    }
-
-    return corsFactory({
+  if (allowAll) {
+    return cors({
       ...baseOptions,
-      origin(origin, callback) {
-        if (!origin) {
-          callback(null, true);
-          return;
-        }
-
-        if (originMatches(origin, matchers)) {
-          callback(null, true);
-          return;
-        }
-
-        callback(new Error("Not allowed by CORS"));
-      },
+      origin: true,
     });
-  } catch (error) {
-    log(
-      `cors package unavailable (${error instanceof Error ? error.message : String(error)}); falling back to manual headers`,
-    );
-    return buildFallbackCorsMiddleware(matchers, allowAll);
   }
+
+  return cors({
+    ...baseOptions,
+    origin(origin, callback) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      if (originMatches(origin, matchers)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Not allowed by CORS"));
+    },
+  });
 }
 
 app.get("/healthz", (_req, res) => {
@@ -264,7 +212,7 @@ app.use((req, res, next) => {
   app.set("env", nodeEnv);
 
   const corsOrigin = process.env.CORS_ORIGIN;
-  const corsMiddleware = await createCorsMiddleware(corsOrigin);
+  const corsMiddleware = createCorsMiddleware(corsOrigin);
   app.use(corsMiddleware);
 
   app.use(express.json());
