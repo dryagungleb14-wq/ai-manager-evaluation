@@ -27,6 +27,14 @@ export const logger = {
       if ('detail' in error) errorDetails.detail = error.detail;
       if ('hint' in error) errorDetails.hint = error.hint;
       if ('cause' in error) errorDetails.cause = error.cause;
+    } else if (typeof error === 'object' && error !== null) {
+      // Handle plain error objects (e.g., from some database drivers)
+      errorDetails.error = error;
+      if ('message' in error) errorDetails.message = String(error.message);
+      if ('code' in error) errorDetails.code = error.code;
+      if ('detail' in error) errorDetails.detail = error.detail;
+      if ('hint' in error) errorDetails.hint = error.hint;
+      if ('stack' in error) errorDetails.stack = error.stack;
     } else {
       errorDetails.message = String(error);
     }
