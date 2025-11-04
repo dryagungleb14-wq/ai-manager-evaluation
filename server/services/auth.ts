@@ -157,6 +157,7 @@ export async function createUser(
   const db = await getDatabase();
   
   const hashedPassword = hashPassword(password);
+  const now = new Date();
   
   const [newUser] = await db
     .insert(users)
@@ -164,6 +165,8 @@ export async function createUser(
       username,
       password: hashedPassword,
       role,
+      createdAt: now,
+      updatedAt: now,
     })
     .returning();
 

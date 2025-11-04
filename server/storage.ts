@@ -152,6 +152,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createManager(manager: Omit<Manager, 'id' | 'createdAt' | 'updatedAt'>): Promise<Manager> {
+    const now = new Date();
     const [created] = await this.db
       .insert(managers)
       .values({
@@ -160,6 +161,8 @@ export class DatabaseStorage implements IStorage {
         email: manager.email,
         teamLead: manager.teamLead,
         department: manager.department,
+        createdAt: now,
+        updatedAt: now,
       })
       .returning();
 
@@ -251,12 +254,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createChecklist(checklist: Checklist): Promise<Checklist> {
+    const now = new Date();
     const [created] = await this.db
       .insert(checklists)
       .values({
         name: checklist.name,
         version: checklist.version,
         items: checklist.items,
+        createdAt: now,
+        updatedAt: now,
       })
       .returning();
 
@@ -350,6 +356,7 @@ export class DatabaseStorage implements IStorage {
         transcript: transcript || "",
         checklistReport: analysis.checklistReport,
         objectionsReport: analysis.objectionsReport,
+        analyzedAt: new Date(),
       })
       .returning();
 
@@ -527,15 +534,19 @@ export class DatabaseStorage implements IStorage {
           id: stage.id.toString(),
           name: stage.name,
           order: stage.order,
-          criteria: criteria.map((c: any) => ({
-            id: c.id.toString(),
-            number: c.number || "",
-            title: c.title,
-            description: c.description || "",
-            weight: c.weight,
-            isBinary: c.isBinary || false,
-            ...(c.levels || {}),
-          })),
+          criteria: criteria.map((c: any) => {
+            // Parse levels if it's a string (SQLite), otherwise use as-is (PostgreSQL)
+            const levels = typeof c.levels === 'string' ? JSON.parse(c.levels) : (c.levels || {});
+            return {
+              id: c.id.toString(),
+              number: c.number || "",
+              title: c.title,
+              description: c.description || "",
+              weight: c.weight,
+              isBinary: c.isBinary || false,
+              ...levels,
+            };
+          }),
         };
       })
     );
@@ -553,12 +564,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createAdvancedChecklist(checklist: AdvancedChecklist): Promise<AdvancedChecklist> {
+    const now = new Date();
     const [created] = await this.db
       .insert(advancedChecklists)
       .values({
         name: checklist.name,
         version: checklist.version,
         totalScore: checklist.totalScore,
+        createdAt: now,
+        updatedAt: now,
       })
       .returning();
 
@@ -583,11 +597,11 @@ export class DatabaseStorage implements IStorage {
             description: criterion.description,
             weight: criterion.weight,
             isBinary: criterion.isBinary || false,
-            levels: {
+            levels: JSON.stringify({
               max: criterion.max,
               mid: criterion.mid,
               min: criterion.min,
-            },
+            }),
           });
       }
     }
@@ -598,8 +612,9 @@ export class DatabaseStorage implements IStorage {
       .values({
         checklistId: created.id,
         action: "created",
-        changes: null,
-        userId: null,
+        // changes: null,
+        // userId: null,
+        // timestamp: now,
       });
 
     return this.getAdvancedChecklistWithStages(created.id.toString()) as Promise<AdvancedChecklist>;
@@ -700,6 +715,7 @@ export class DatabaseStorage implements IStorage {
         language,
         transcript: transcript || "",
         report,
+        analyzedAt: new Date(),
       })
       .returning();
 
