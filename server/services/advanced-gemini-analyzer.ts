@@ -13,32 +13,25 @@ export async function analyzeAdvancedChecklist(
   language: string = "ru"
 ): Promise<AdvancedChecklistReport> {
   try {
-    const systemPrompt = `Эксперт по оценке менеджеров. Для каждого критерия определи уровень (MAX/MID/MIN/null), балл, цитаты, комментарий.
+    const systemPrompt = `Оцени менеджера по критериям. Для каждого: уровень (max/mid/min/null), балл, цитаты, комментарий.
 
-MAX = идеально выполнен
-MID = частично выполнен  
-MIN = плохо выполнен
-null = не выполнен
+max=выполнен, mid=частично, min=плохо, null=отсутствует
 
-Ответ строго в JSON:
+JSON:
 {
-  "stages": [
-    {
-      "stageName": "Этап",
-      "criteria": [
-        {
-          "id": "id",
-          "number": "1.1",
-          "title": "название",
-          "achievedLevel": "max|mid|min|null",
-          "score": 5,
-          "evidence": [{"text": "цитата", "timestamp": "12"}],
-          "comment": "комментарий"
-        }
-      ]
-    }
-  ],
-  "summary": "Сводка 2-3 предложения"
+  "stages": [{
+    "stageName": "Этап",
+    "criteria": [{
+      "id": "id",
+      "number": "1.1",
+      "title": "название",
+      "achievedLevel": "max|mid|min|null",
+      "score": 1,
+      "evidence": [{"text": "цитата"}],
+      "comment": "краткий комментарий"
+    }]
+  }],
+  "summary": "Краткая сводка"
 }`;
 
     const checklistData = checklist.stages.map(stage => ({
@@ -75,7 +68,7 @@ ${transcript}
 КРИТЕРИИ:
 ${JSON.stringify(checklistData)}
 
-Проанализируй и верни JSON.`;
+Верни JSON.`;
 
     const fullPrompt = systemPrompt + "\n\n" + contents;
     const promptLength = fullPrompt.length;
