@@ -13,6 +13,7 @@ import {
   storageUsesDatabase,
 } from "./storage.js";
 import { preTrialChecklist } from "./data/pre-trial-checklist.js";
+import { forUlyanaChecklist } from "./data/for-ulyana-checklist.js";
 import type { CorsOptions } from "./types/cors-options";
 
 const app = express();
@@ -348,7 +349,7 @@ app.use((req, res, next) => {
   ];
 
   await seedDefaultChecklists(defaultChecklists);
-  await seedDefaultAdvancedChecklists([preTrialChecklist]);
+  await seedDefaultAdvancedChecklists([preTrialChecklist, forUlyanaChecklist]);
   await seedDefaultManagers();
   
   await registerRoutes(app);
