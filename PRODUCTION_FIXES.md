@@ -24,19 +24,34 @@ Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'better-sqlite3' imported from
 
 ### 2. SESSION_SECRET must be set in production
 
-**Problem:** The application requires a `SESSION_SECRET` environment variable for secure session management in production, but it was not documented.
+**Problem:** The application requires a `SESSION_SECRET` environment variable for secure session management in production, but it was not documented or configured.
 
 **Error Message:**
 ```
 Error: SESSION_SECRET must be set in production
 ```
 
-**Solution:** Added `SESSION_SECRET` to `server/.env.example` to document this required environment variable:
-```env
-SESSION_SECRET=your-secret-session-key-min-32-chars
+**Solution:** 
+1. Added `SESSION_SECRET` to `server/.env.example` with comprehensive documentation
+2. Added `SESSION_SECRET` to `ci.env.example` for CI/CD environments
+3. Updated `README_BACKEND_DEPLOY.md` to clearly document this as a required variable
+4. Updated main `README.md` to include SESSION_SECRET in environment setup
+
+**How to generate a secure SESSION_SECRET:**
+```bash
+openssl rand -hex 32
 ```
 
-**Important:** In production deployment (Railway, Heroku, etc.), you must set this environment variable to a secure random string of at least 32 characters.
+**Example output:**
+```
+2f4adba7c050a28ae7cb8060902d7ee2f1f90ff45a164edae1ae07d65ca8b771
+```
+
+**Important:** 
+- In production deployment (Railway, Heroku, etc.), you **must** set this environment variable to a secure random string of at least 32 characters.
+- The application will crash on startup if SESSION_SECRET is not set in production mode.
+- Generate a unique value for each environment (development, staging, production).
+- Never commit the actual SESSION_SECRET to version control or share it publicly.
 
 ### 3. npm config production warning
 
@@ -59,11 +74,23 @@ cmds = [
 When deploying to production, ensure:
 
 1. ✅ `better-sqlite3` is installed (now in root package.json)
-2. ✅ `SESSION_SECRET` environment variable is set
+2. ✅ `SESSION_SECRET` environment variable is set to a cryptographically secure random key (generate with `openssl rand -hex 32`)
 3. ✅ `DATABASE_URL` is set for PostgreSQL (or omit for local SQLite)
 4. ✅ `GEMINI_API_KEY` is set for AI features
-5. ✅ Build command runs: `npm run build:server`
-6. ✅ Start command runs: `npm start`
+5. ✅ `FRONTEND_ORIGIN` is set to allow CORS from your frontend
+6. ✅ Build command runs: `npm run build:server`
+7. ✅ Start command runs: `npm start`
+
+### Railway Specific Setup
+
+In Railway dashboard:
+1. Go to your service → **Variables** tab
+2. Add the following environment variables:
+   - `SESSION_SECRET` = (generate with `openssl rand -hex 32`)
+   - `DATABASE_URL` = (automatically set by Neon plugin)
+   - `GEMINI_API_KEY` = (your Google AI Studio key)
+   - `FRONTEND_ORIGIN` = (your Vercel deployment URL)
+3. Save and redeploy
 
 ## Testing
 
@@ -71,10 +98,23 @@ To test production mode locally:
 
 ```bash
 # Build the application
-npm run build
+npm run build:server
+
+# Generate a secure session secret
+SESSION_SECRET=$(openssl rand -hex 32)
 
 # Run in production mode with required environment variables
-SESSION_SECRET="your-secret-key-min-32-chars" NODE_ENV=production npm start
+SESSION_SECRET="$SESSION_SECRET" NODE_ENV=production npm start
+```
+
+Or manually set it:
+
+```bash
+# Build the application
+npm run build:server
+
+# Run in production mode with required environment variables
+SESSION_SECRET="your-secret-key-generated-with-openssl" NODE_ENV=production npm start
 ```
 
 ## Notes

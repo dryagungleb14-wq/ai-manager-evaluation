@@ -23,6 +23,7 @@ Create a `.env` file inside `server/` (Railway automatically injects variables a
 | `PORT` | HTTP port used by Express. Railway injects `PORT` automatically, default is `3000` for local runs. |
 | `DATABASE_URL` | PostgreSQL connection string. Railway sets this automatically when the Neon plugin is attached. Without it the API falls back to an in-memory store that is not suitable for production. |
 | `GEMINI_API_KEY` | API key from Google AI Studio used by the analyzer and transcription helpers. Required for smoke tests and production traffic. |
+| `SESSION_SECRET` | **REQUIRED for production.** Cryptographically secure random key for session management. Generate with `openssl rand -hex 32`. Must be at least 32 characters. The application will crash on startup if this is not set in production mode. |
 | `FRONTEND_ORIGIN` | Production frontend URL (e.g. `https://ai-manager-evaluation.vercel.app`). Used by the server CORS policy so the Vercel app can reach the API with credentials. |
 | `FRONTEND_ORIGIN_ALT` | Optional secondary frontend origin for preview deployments (e.g. `https://ai-manager-evaluation-git-main.vercel.app`). |
 

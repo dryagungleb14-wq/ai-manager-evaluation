@@ -39,6 +39,7 @@
    ```
    Ключевые параметры:
    - `GEMINI_API_KEY` — обязательный ключ для транскрибации и AI-анализа (Google AI Studio).
+   - `SESSION_SECRET` — обязательный ключ для безопасности сессий в production (сгенерируйте через `openssl rand -hex 32`).
    - `GEMINI_API_BASE_URL`, `GEMINI_API_VERSION`, `GEMINI_TIMEOUT_MS` — необязательные настройки клиента Gemini.
    - `DATABASE_URL` — строка подключения к PostgreSQL (при отсутствии используется локальный `local.db`).
    - `CORS_ORIGIN` — список доменов, которым разрешён доступ к API.
