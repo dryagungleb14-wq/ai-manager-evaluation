@@ -141,6 +141,25 @@ export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>;
 export type AnalyzeRequest = z.infer<typeof analyzeRequestSchema>;
 export type AnalyzeResponse = z.infer<typeof analyzeResponseSchema>;
 
+// Auth schemas for API
+export const loginRequestSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+});
+
+export const loginResponseSchema = z.object({
+  success: z.boolean(),
+  user: z.object({
+    id: z.string(),
+    username: z.string(),
+    role: z.enum(["admin", "user"]),
+  }).optional(),
+  message: z.string().optional(),
+});
+
+export type LoginRequest = z.infer<typeof loginRequestSchema>;
+export type LoginResponse = z.infer<typeof loginResponseSchema>;
+
 // Manager schema for API
 export const managerSchema = z.object({
   id: z.string(),
@@ -165,6 +184,17 @@ export type InsertChecklist = z.infer<typeof insertChecklistSchema>;
 export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
 
 // Drizzle Tables for PostgreSQL
+
+// Users table for authentication
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(), // Hashed password
+  role: text("role", { enum: ["admin", "user"] }).notNull().default("user"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const managers = pgTable("managers", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -187,6 +217,7 @@ export const checklists = pgTable("checklists", {
 
 export const analyses = pgTable("analyses", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
   checklistId: integer("checklist_id").references(() => checklists.id),
   managerId: integer("manager_id").references(() => managers.id),
   source: text("source", { enum: ["call", "correspondence"] }).notNull(),
@@ -198,6 +229,12 @@ export const analyses = pgTable("analyses", {
 });
 
 // Drizzle-Zod schemas for inserts
+export const insertUserDbSchema = createInsertSchema(users).omit({ 
+  id: true,
+  createdAt: true, 
+  updatedAt: true 
+});
+
 export const insertManagerDbSchema = createInsertSchema(managers).omit({ 
   id: true,
   createdAt: true, 
@@ -216,6 +253,8 @@ export const insertAnalysisDbSchema = createInsertSchema(analyses).omit({
 });
 
 // Types from Drizzle tables
+export type DbUser = typeof users.$inferSelect;
+export type InsertDbUser = z.infer<typeof insertUserDbSchema>;
 export type DbManager = typeof managers.$inferSelect;
 export type InsertDbManager = z.infer<typeof insertManagerDbSchema>;
 export type DbChecklist = typeof checklists.$inferSelect;
@@ -355,6 +394,7 @@ export const checklistHistory = pgTable("checklist_history", {
 
 export const advancedAnalyses = pgTable("advanced_analyses", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
   checklistId: integer("checklist_id").references(() => advancedChecklists.id),
   managerId: integer("manager_id").references(() => managers.id),
   source: text("source", { enum: ["call", "correspondence"] }).notNull(),
