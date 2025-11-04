@@ -17,6 +17,7 @@ import {
 } from "./shared/schema.js";
 import { eq, desc } from "drizzle-orm";
 import { getDatabase, type DatabaseClient } from "./db.js";
+import { logger } from "./utils/logger.js";
 
 export type StoredAnalysis = {
   id: string;
@@ -1060,7 +1061,7 @@ export async function seedDefaultManagers(): Promise<void> {
       console.log(`Seeded ${defaultManagers.length} default managers`);
     }
   } catch (error) {
-    console.warn("[storage] Failed to seed managers:", error instanceof Error ? error.message : String(error));
+    logger.error('storage', error, { operation: 'seedManagers' });
     console.warn("[storage] Continuing with empty managers database");
   }
 }
@@ -1091,7 +1092,7 @@ export async function seedDefaultUsers(): Promise<void> {
       console.log("Seeded 3 default users (1 admin, 2 managers)");
     }
   } catch (error) {
-    console.warn("[storage] Failed to seed users:", error instanceof Error ? error.message : String(error));
+    logger.error('storage', error, { operation: 'seedUsers' });
     console.warn("[storage] Continuing without seeded users - use in-memory users for authentication");
   }
 }
@@ -1109,7 +1110,7 @@ export async function seedDefaultChecklists(defaultChecklists: Checklist[]): Pro
       console.log(`Seeded ${defaultChecklists.length} default checklists`);
     }
   } catch (error) {
-    console.warn("[storage] Failed to seed checklists:", error instanceof Error ? error.message : String(error));
+    logger.error('storage', error, { operation: 'seedChecklists' });
     console.warn("[storage] Continuing with empty checklist database");
   }
 }
@@ -1127,7 +1128,7 @@ export async function seedDefaultAdvancedChecklists(defaultAdvancedChecklists: A
       console.log(`Seeded ${defaultAdvancedChecklists.length} default advanced checklists`);
     }
   } catch (error) {
-    console.warn("[storage] Failed to seed advanced checklists:", error instanceof Error ? error.message : String(error));
+    logger.error('storage', error, { operation: 'seedAdvancedChecklists' });
     console.warn("[storage] Continuing with empty advanced checklist database");
   }
 }

@@ -1,5 +1,6 @@
 // Integration: blueprint:javascript_database
 import * as schema from "./shared/schema.js";
+import { logger } from "./utils/logger.js";
 
 const isLocalDev = !process.env.DATABASE_URL;
 
@@ -141,13 +142,21 @@ async function createRemoteDatabase(): Promise<DatabaseClient> {
     throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
   }
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  return drizzle({ client: pool, schema }) as unknown as DatabaseClient;
+  try {
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    return drizzle({ client: pool, schema }) as unknown as DatabaseClient;
+  } catch (error) {
+    logger.dbConnectionError(error, process.env.DATABASE_URL);
+    throw error;
+  }
 }
 
 const databasePromise: Promise<DatabaseClient> = (isLocalDev ? createLocalDatabase() : createRemoteDatabase())
   .catch((error) => {
-    console.error("Failed to initialize database", error);
+    logger.error("db", error, { 
+      operation: "database initialization",
+      isLocalDev 
+    });
     throw error;
   });
 
