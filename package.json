@@ -94,6 +94,7 @@
     "zod": "^3.24.2",
     "zod-validation-error": "^3.4.0",
     "autoprefixer": "^10.4.20",
+    "better-sqlite3": "^11.10.0",
     "cors": "^2.8.5",
     "esbuild": "^0.25.0",
     "postcss": "^8.4.47"
