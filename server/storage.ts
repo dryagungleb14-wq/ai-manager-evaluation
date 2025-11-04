@@ -1000,7 +1000,7 @@ class InMemoryStorage implements IStorage {
 }
 
 
-let storageReadyPromise: Promise<void>;
+let storageReadyPromise: Promise<void> | undefined;
 
 function initializeStorage(): void {
   storage = new InMemoryStorage();
@@ -1029,7 +1029,9 @@ initializeStorage();
  * This should be called before seeding or using storage to ensure it's ready
  */
 export async function waitForStorage(): Promise<void> {
-  await storageReadyPromise;
+  if (storageReadyPromise) {
+    await storageReadyPromise;
+  }
 }
 
 // Seed function to initialize default managers

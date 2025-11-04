@@ -171,6 +171,9 @@ function createCorsMiddleware(): RequestHandler {
  * 
  * In production, a persistent session store is required to maintain sessions
  * across server restarts and multiple instances.
+ * 
+ * @param nodeEnv - The NODE_ENV value (production, development, etc.)
+ * @returns session.Store instance or undefined (express-session will use default MemoryStore when undefined)
  */
 async function createSessionStore(nodeEnv: string): Promise<session.Store | undefined> {
   // In production, we should use a persistent session store
