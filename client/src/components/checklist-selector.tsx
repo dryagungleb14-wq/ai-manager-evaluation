@@ -204,12 +204,12 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
           <Select
             value={activeId}
             onValueChange={handleSelectChange}
-            disabled={isLoading}
+            disabled={isLoading || checklists.length === 0}
             open={dropdown.open}
             onOpenChange={dropdown.onOpenChange}
           >
             <SelectTrigger data-testid="select-checklist">
-              <SelectValue placeholder={isLoading ? "Загрузка..." : "Выберите чек-лист"} />
+              <SelectValue placeholder={isLoading ? "Загрузка..." : checklists.length === 0 ? "Нет доступных чек-листов" : "Выберите чек-лист"} />
             </SelectTrigger>
             <SelectContent
               position="popper"
@@ -217,18 +217,24 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
               align="start"
               className="z-50"
             >
-              {checklists.map((checklist) => (
-                <SelectItem key={checklist.id} value={checklist.id}>
-                  <div className="flex items-center gap-2">
-                    <span>{checklist.name}</span>
-                    {checklist.type === "advanced" && (
-                      <Badge variant="secondary" className="text-xs">
-                        Продвинутый
-                      </Badge>
-                    )}
-                  </div>
-                </SelectItem>
-              ))}
+              {checklists.length === 0 ? (
+                <div className="p-4 text-sm text-muted-foreground text-center">
+                  Нет доступных чек-листов
+                </div>
+              ) : (
+                checklists.map((checklist) => (
+                  <SelectItem key={checklist.id} value={checklist.id}>
+                    <div className="flex items-center gap-2">
+                      <span>{checklist.name}</span>
+                      {checklist.type === "advanced" && (
+                        <Badge variant="secondary" className="text-xs">
+                          Продвинутый
+                        </Badge>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))
+              )}
             </SelectContent>
           </Select>
 
