@@ -12,7 +12,7 @@ export const forUlyanaChecklist: AdvancedChecklist = {
   name: "Для Ульяны",
   version: "1.0",
   type: "advanced",
-  totalScore: 15,
+  totalScore: 13,
   stages: [
     {
       id: "contact-establishment",
