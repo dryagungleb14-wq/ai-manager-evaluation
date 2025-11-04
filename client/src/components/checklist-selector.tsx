@@ -44,7 +44,7 @@ interface ChecklistSelectorProps {
 }
 
 export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps) {
-  const [activeId, setActiveId] = useState<string>("");
+  const [activeId, setActiveId] = useState<string | undefined>(undefined);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const { toast } = useToast();
   const dropdown = useDropdownController("checklist-selector");
@@ -90,6 +90,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
   });
 
   useEffect(() => {
+    // Only auto-select if we have checklists and no active ID is set
     if (checklists.length > 0 && !activeId) {
       const storedActive = localStorage.getItem("manager-eval-active-checklist");
       const active = storedActive && checklists.find((c) => c.id === storedActive)
