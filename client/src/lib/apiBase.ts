@@ -13,6 +13,8 @@ export function getApiBaseUrl(): string {
   return rawBaseUrl.replace(/\/$/, "");
 }
 
+let configWarningShown = false;
+
 export function buildApiUrl(path: string): string {
   if (API_URL_PATTERN.test(path)) {
     return path;
@@ -21,5 +23,20 @@ export function buildApiUrl(path: string): string {
   const baseUrl = getApiBaseUrl();
   const normalizedPath = normalizePath(path);
 
-  return baseUrl ? `${baseUrl}${normalizedPath}` : normalizedPath;
+  if (!baseUrl && import.meta.env.PROD && !configWarningShown) {
+    configWarningShown = true;
+    console.error(
+      "[API Config] VITE_API_BASE_URL не установлен. " +
+      "API запросы будут отправляться на текущий домен. " +
+      "Для работы с отдельным бэкендом установите VITE_API_BASE_URL в переменных окружения Vercel."
+    );
+  }
+
+  const finalUrl = baseUrl ? `${baseUrl}${normalizedPath}` : normalizedPath;
+  
+  if (import.meta.env.DEV) {
+    console.log(`[API] ${normalizedPath} -> ${finalUrl}`);
+  }
+
+  return finalUrl;
 }

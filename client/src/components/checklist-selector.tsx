@@ -52,18 +52,24 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
   const dropdown = useDropdownController("checklist-selector");
 
   // Fetch simple checklists from API
-  const { data: simpleChecklists = [], isLoading: isLoadingSimple } = useQuery<Checklist[]>({
+  const { data: simpleChecklists = [], isLoading: isLoadingSimple, error: simpleError } = useQuery<Checklist[]>({
     queryKey: ["/api/checklists"],
   });
 
   // Fetch advanced checklists from API
-  const { data: advancedChecklists = [], isLoading: isLoadingAdvanced } = useQuery<AdvancedChecklist[]>({
+  const { data: advancedChecklists = [], isLoading: isLoadingAdvanced, error: advancedError } = useQuery<AdvancedChecklist[]>({
     queryKey: ["/api/advanced-checklists"],
   });
 
   // Combine both types of checklists
   const checklists: AnyChecklist[] = [...simpleChecklists, ...advancedChecklists];
   const isLoading = isLoadingSimple || isLoadingAdvanced;
+  const hasErrors = simpleError || advancedError;
+  
+  if (hasErrors && !isLoading && checklists.length === 0) {
+    console.error("[Checklist Selector] Ошибка загрузки чек-листов:", { simpleError, advancedError });
+    console.error("[Checklist Selector] Проверьте настройку VITE_API_BASE_URL и доступность бэкенда");
+  }
 
   // Create checklist mutation
   const createChecklistMutation = useMutation<Checklist, Error, InsertChecklist>({
@@ -211,7 +217,15 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
             onOpenChange={dropdown.onOpenChange}
           >
             <SelectTrigger data-testid="select-checklist">
-              <SelectValue placeholder={isLoading ? "Загрузка..." : checklists.length === 0 ? "Нет доступных чек-листов" : "Выберите чек-лист"} />
+              <SelectValue placeholder={
+                isLoading 
+                  ? "Загрузка..." 
+                  : checklists.length === 0 
+                    ? hasErrors 
+                      ? "Ошибка загрузки чек-листов" 
+                      : "Нет доступных чек-листов"
+                    : "Выберите чек-лист"
+              } />
             </SelectTrigger>
             <SelectContent
               position="popper"
@@ -221,7 +235,14 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
             >
               {checklists.length === 0 ? (
                 <div className="p-4 text-sm text-muted-foreground text-center">
-                  Нет доступных чек-листов
+                  {hasErrors ? (
+                    <>
+                      <div className="font-medium text-destructive mb-1">Ошибка загрузки</div>
+                      <div className="text-xs">Проверьте подключение к серверу и консоль браузера</div>
+                    </>
+                  ) : (
+                    "Нет доступных чек-листов"
+                  )}
                 </div>
               ) : (
                 checklists.map((checklist) => (
