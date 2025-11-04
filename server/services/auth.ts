@@ -54,6 +54,24 @@ const inMemoryUsers: DbUser[] = [
 ];
 
 /**
+ * Authenticate a user against in-memory user storage
+ * Helper function to reduce code duplication
+ */
+function authenticateInMemoryUser(username: string, password: string): DbUser | null {
+  const user = inMemoryUsers.find(u => u.username === username);
+  
+  if (!user) {
+    return null;
+  }
+
+  if (!verifyPassword(password, user.password)) {
+    return null;
+  }
+
+  return user;
+}
+
+/**
  * Authenticate a user by username and password
  * Falls back to in-memory users when database is unavailable
  */
@@ -64,17 +82,7 @@ export async function authenticateUser(
   // Use in-memory users when database is unavailable
   if (!storageUsesDatabase) {
     console.log("[auth] Using in-memory user storage (database unavailable)");
-    const user = inMemoryUsers.find(u => u.username === username);
-    
-    if (!user) {
-      return null;
-    }
-
-    if (!verifyPassword(password, user.password)) {
-      return null;
-    }
-
-    return user;
+    return authenticateInMemoryUser(username, password);
   }
 
   // Use database when available
@@ -99,17 +107,7 @@ export async function authenticateUser(
   } catch (error) {
     console.error("[auth] Database authentication failed, falling back to in-memory users:", error);
     // Fallback to in-memory users if database fails
-    const user = inMemoryUsers.find(u => u.username === username);
-    
-    if (!user) {
-      return null;
-    }
-
-    if (!verifyPassword(password, user.password)) {
-      return null;
-    }
-
-    return user;
+    return authenticateInMemoryUser(username, password);
   }
 }
 
@@ -121,7 +119,7 @@ export async function getUserById(id: number): Promise<DbUser | null> {
   // Use in-memory users when database is unavailable
   if (!storageUsesDatabase) {
     const user = inMemoryUsers.find(u => u.id === id);
-    return user || null;
+    return user ?? null;
   }
 
   // Use database when available
@@ -134,12 +132,12 @@ export async function getUserById(id: number): Promise<DbUser | null> {
       .where(eq(users.id, id))
       .limit(1);
 
-    return user || null;
+    return user ?? null;
   } catch (error) {
     console.error("[auth] Database getUserById failed, falling back to in-memory users:", error);
     // Fallback to in-memory users if database fails
     const user = inMemoryUsers.find(u => u.id === id);
-    return user || null;
+    return user ?? null;
   }
 }
 
