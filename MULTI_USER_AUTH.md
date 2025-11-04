@@ -2,6 +2,29 @@
 
 This document describes the multi-user authentication system that has been implemented.
 
+## ⚠️ Security Notice - MVP Implementation
+
+This is an MVP (Minimum Viable Product) implementation with simplified security for rapid deployment and testing. The following security enhancements should be implemented before production use:
+
+### Known Security Limitations
+
+1. **Password Hashing (Critical)**
+   - Current: SHA-256 (vulnerable to rainbow tables)
+   - Recommended: Use bcrypt, scrypt, or argon2 with proper salt
+   - File: `server/services/auth.ts`
+
+2. **CSRF Protection (Important)**
+   - Current: No CSRF token validation
+   - Recommended: Implement CSRF tokens for state-changing operations
+   - File: `server/index.ts` - session middleware
+
+3. **Rate Limiting (Important)**
+   - Current: No rate limiting on login endpoint
+   - Recommended: Add rate limiting to prevent brute force attacks
+   - File: `server/routes.ts` - `/api/auth/login`
+
+These issues are documented and acceptable for internal testing with trusted users. For production deployment with external users, address these security concerns.
+
 ## Overview
 
 The system now supports multiple users with role-based access control:
@@ -151,11 +174,18 @@ Ensure these are set:
 
 ## Future Enhancements
 
-Potential improvements for production:
-1. Use bcrypt or argon2 for password hashing
-2. Add password reset functionality
-3. Add user management UI for admin
-4. Add rate limiting for login attempts
+### Security Hardening (Priority)
+1. ⚠️ **Replace SHA-256 with bcrypt/argon2** for password hashing
+2. ⚠️ **Add CSRF protection** for state-changing operations
+3. ⚠️ **Implement rate limiting** on login endpoint to prevent brute force
+4. Add password complexity requirements
 5. Add 2FA support
-6. Add JWT tokens for API authentication
+6. Add password reset functionality
 7. Add audit log for admin actions
+
+### Feature Enhancements
+1. Add user management UI for admin
+2. Add JWT tokens for API authentication (optional)
+3. Add session timeout warnings
+4. Add user activity monitoring
+5. Add email notifications for security events
