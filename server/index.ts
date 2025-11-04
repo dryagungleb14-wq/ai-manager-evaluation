@@ -13,10 +13,12 @@ import {
   seedDefaultUsers,
   storageInitializationError,
   storageUsesDatabase,
+  waitForStorage,
 } from "./storage.js";
 import { preTrialChecklist } from "./data/pre-trial-checklist.js";
 import { forUlyanaChecklist } from "./data/for-ulyana-checklist.js";
 import type { CorsOptions } from "./types/cors-options";
+import { getDatabase } from "./db.js";
 
 // Extend Express Session type to include user data
 declare module "express-session" {
@@ -162,8 +164,67 @@ function createCorsMiddleware(): RequestHandler {
   });
 }
 
+/**
+ * Create session store with fallback strategy:
+ * 1. Try PostgreSQL session store (connect-pg-simple) if DATABASE_URL is set
+ * 2. Fall back to MemoryStore (for development only)
+ * 
+ * In production, a persistent session store is required to maintain sessions
+ * across server restarts and multiple instances.
+ * 
+ * @param nodeEnv - The NODE_ENV value (production, development, etc.)
+ * @returns session.Store instance or undefined (express-session will use default MemoryStore when undefined)
+ */
+async function createSessionStore(nodeEnv: string): Promise<session.Store | undefined> {
+  // In production, we should use a persistent session store
+  if (nodeEnv === "production" && process.env.DATABASE_URL) {
+    try {
+      const pgSession = (await import("connect-pg-simple")).default(session);
+      const { Pool } = await import("@neondatabase/serverless");
+      const ws = await import("ws");
+      const { neonConfig } = await import("@neondatabase/serverless");
+      
+      neonConfig.webSocketConstructor = ws.default;
+      
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      
+      const store = new pgSession({
+        pool,
+        tableName: "session", // Will be created automatically
+        createTableIfMissing: true,
+      });
+      
+      log("Session store: PostgreSQL (connect-pg-simple)", "session");
+      return store;
+    } catch (error) {
+      console.warn("[session] Failed to initialize PostgreSQL session store, falling back to MemoryStore");
+      console.warn(`[session] Error: ${error instanceof Error ? error.message : String(error)}`);
+      console.warn("[session] WARNING: Sessions will not persist across server restarts in DEGRADED MODE");
+    }
+  }
+  
+  // Development mode or fallback: use MemoryStore
+  if (nodeEnv === "production") {
+    console.warn("[session] WARNING: Using MemoryStore in production. Sessions will not persist!");
+    console.warn("[session] For production, set DATABASE_URL or configure Redis for persistent sessions.");
+  } else {
+    log("Session store: MemoryStore (development only)", "session");
+  }
+  
+  return undefined; // express-session will use default MemoryStore
+}
+
 app.get("/health", (_req, res) => {
-  res.status(200).json({ status: "ok", version: serviceVersion, uptime: process.uptime() });
+  const health = {
+    status: "ok",
+    version: serviceVersion,
+    uptime: process.uptime(),
+    storage: storageUsesDatabase ? "database" : "in-memory",
+    degraded: !storageUsesDatabase,
+  };
+  
+  // Return 200 even in degraded mode - the service is still functional
+  res.status(200).json(health);
 });
 
 app.get("/version", (_req, res) => {
@@ -221,9 +282,12 @@ app.use((req, res, next) => {
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
 
-  // Session middleware
+  // Session middleware with persistent store
+  const sessionStore = await createSessionStore(nodeEnv);
+  
   app.use(
     session({
+      store: sessionStore,
       secret: process.env.SESSION_SECRET || (() => {
         if (nodeEnv === "production") {
           throw new Error("SESSION_SECRET must be set in production");
@@ -245,11 +309,20 @@ app.use((req, res, next) => {
   log(`authentication guard ${authGuard.enabled ? "enabled" : "disabled"}`, "auth");
   app.use(authGuard);
 
+  // Wait for storage to be ready before checking status or seeding
+  await waitForStorage();
+
+  // Log degraded mode status
   if (!storageUsesDatabase) {
-    const fallbackMessage = storageInitializationError
-      ? `Database unavailable (${storageInitializationError.message}). Falling back to in-memory storage.`
-      : "Database unavailable. Falling back to in-memory storage.";
-    log(fallbackMessage, "storage");
+    const degradedModeMessage = storageInitializationError
+      ? `⚠️  DEGRADED MODE: Database unavailable (${storageInitializationError.message})`
+      : "⚠️  DEGRADED MODE: Database unavailable";
+    
+    log(degradedModeMessage, "storage");
+    log("⚠️  Using in-memory storage - data will not persist across restarts", "storage");
+    log("⚠️  All critical API endpoints will work but changes are temporary", "storage");
+  } else {
+    log("✓ Database connection successful - using persistent storage", "storage");
   }
 
   // Seed default checklists on startup (only if database is empty)
