@@ -382,7 +382,11 @@ app.use((req, res, next) => {
   await seedDefaultChecklists(defaultChecklists);
   await seedDefaultAdvancedChecklists([preTrialChecklist, forUlyanaChecklist]);
   await seedDefaultManagers();
-  await seedDefaultUsers();
+  
+  // Only seed users when using database storage (not in-memory)
+  if (storageUsesDatabase) {
+    await seedDefaultUsers();
+  }
   
   await registerRoutes(app);
 
