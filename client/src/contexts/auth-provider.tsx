@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { buildApiUrl } from "@/lib/apiBase";
+import { queryClient } from "@/lib/queryClient";
 
 export interface User {
   id: string;
@@ -62,6 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setUser(data.user);
+    
+    // Clear the query cache after successful login to ensure fresh data fetch
+    queryClient.clear();
   };
 
   const logout = async () => {
@@ -74,6 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Logout error:", error);
     } finally {
       setUser(null);
+      // Clear the query cache on logout
+      queryClient.clear();
     }
   };
 
