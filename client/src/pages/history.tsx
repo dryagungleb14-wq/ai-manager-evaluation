@@ -11,12 +11,15 @@ import {
   MessageSquare,
   ChevronRight,
   Loader2,
+  Home as HomeIcon,
 } from "lucide-react";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { UserInfo } from "@/components/user-info";
 
 interface AnalysisHistoryItem {
   id: string;
@@ -90,22 +93,33 @@ export default function History() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="container flex h-16 items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <HistoryIcon className="h-6 w-6 text-primary" />
+            <h1 className="text-xl font-bold">История анализов</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/">
+              <Button variant="outline" size="sm" className="gap-2">
+                <HomeIcon className="h-4 w-4" />
+                Главная
+              </Button>
+            </Link>
+            <ThemeToggle />
+            <UserInfo />
+          </div>
+        </div>
+      </header>
+
       <div className="max-w-7xl mx-auto p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3" data-testid="title-history">
-              <HistoryIcon className="h-8 w-8" />
-              История анализов
-            </h1>
             <p className="text-muted-foreground mt-2">
               Просмотр всех выполненных анализов звонков и переписок
             </p>
           </div>
-          <Link href="/">
-            <Button variant="outline" data-testid="button-back-to-home">
-              Назад к анализу
-            </Button>
-          </Link>
         </div>
 
         {isLoading ? (

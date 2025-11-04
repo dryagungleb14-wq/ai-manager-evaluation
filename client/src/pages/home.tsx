@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserInfo } from "@/components/user-info";
 import { AnalysisReport, AdvancedChecklistReport } from "@/lib/rest";
 import { buildApiUrl } from "@/lib/apiBase";
 import type { AnyChecklist } from "@/components/checklist-selector";
@@ -172,6 +173,7 @@ export default function Home() {
               </Button>
             </Link>
             <ThemeToggle />
+            <UserInfo />
           </div>
         </div>
       </header>
