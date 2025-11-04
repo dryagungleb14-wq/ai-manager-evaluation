@@ -19,7 +19,7 @@ import { preTrialChecklist } from "./data/pre-trial-checklist.js";
 import { forUlyanaChecklist } from "./data/for-ulyana-checklist.js";
 import type { CorsOptions } from "./types/cors-options";
 import { getDatabase } from "./db.js";
-import { logger } from "./utils/logger.js";
+import { logger, maskPassword } from "./utils/logger.js";
 
 // Extend Express Session type to include user data
 declare module "express-session" {
@@ -282,14 +282,14 @@ app.use((req, res, next) => {
     
     if (dbUrl.startsWith('ws://') || dbUrl.startsWith('wss://')) {
       console.error('❌ DATABASE_URL uses WebSocket protocol. PostgreSQL requires postgresql:// protocol');
-      console.error(`   Current: ${dbUrl.replace(/:[^:@]+@/, ':***@')}`);
+      console.error(`   Current: ${maskPassword(dbUrl)}`);
       console.error('   Expected format: postgresql://user:password@host:port/database');
       process.exit(1);
     }
     
     if (!dbUrl.startsWith('postgresql://') && !dbUrl.startsWith('postgres://')) {
       console.warn('⚠️  DATABASE_URL does not use postgresql:// or postgres:// protocol');
-      console.warn(`   Current: ${dbUrl.replace(/:[^:@]+@/, ':***@')}`);
+      console.warn(`   Current: ${maskPassword(dbUrl)}`);
       console.warn('   Expected format: postgresql://user:password@host:port/database');
     } else {
       console.log('✅ DATABASE_URL format is valid');

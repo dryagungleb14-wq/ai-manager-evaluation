@@ -3,6 +3,15 @@
  * Provides consistent logging format across the application
  */
 
+/**
+ * Mask password in database URL for secure logging
+ * @param url - Database URL that may contain password
+ * @returns URL with password replaced by ***
+ */
+export function maskPassword(url?: string): string | undefined {
+  return url?.replace(/:[^:@]+@/, ':***@');
+}
+
 export const logger = {
   /**
    * Log an error with full context and stack trace
@@ -29,12 +38,13 @@ export const logger = {
       if ('cause' in error) errorDetails.cause = error.cause;
     } else if (typeof error === 'object' && error !== null) {
       // Handle plain error objects (e.g., from some database drivers)
-      errorDetails.error = error;
+      // Extract specific properties to avoid circular references
       if ('message' in error) errorDetails.message = String(error.message);
       if ('code' in error) errorDetails.code = error.code;
       if ('detail' in error) errorDetails.detail = error.detail;
       if ('hint' in error) errorDetails.hint = error.hint;
       if ('stack' in error) errorDetails.stack = error.stack;
+      if ('name' in error) errorDetails.name = error.name;
     } else {
       errorDetails.message = String(error);
     }
@@ -53,10 +63,12 @@ export const logger = {
    * @param metadata - Additional metadata
    */
   warn: (context: string, message: string, metadata?: Record<string, any>) => {
-    const logData = metadata
-      ? { message, ...metadata, timestamp: new Date().toISOString() }
-      : message;
-    console.warn(`[${context}] ${message}`, metadata ? logData : '');
+    if (metadata && Object.keys(metadata).length > 0) {
+      const logData = { message, ...metadata, timestamp: new Date().toISOString() };
+      console.warn(`[${context}] ${message}`, logData);
+    } else {
+      console.warn(`[${context}] ${message}`);
+    }
   },
 
   /**
@@ -66,10 +78,12 @@ export const logger = {
    * @param metadata - Additional metadata
    */
   info: (context: string, message: string, metadata?: Record<string, any>) => {
-    const logData = metadata
-      ? { message, ...metadata, timestamp: new Date().toISOString() }
-      : undefined;
-    console.log(`[${context}] ${message}`, logData || '');
+    if (metadata && Object.keys(metadata).length > 0) {
+      const logData = { message, ...metadata, timestamp: new Date().toISOString() };
+      console.log(`[${context}] ${message}`, logData);
+    } else {
+      console.log(`[${context}] ${message}`);
+    }
   },
 
   /**
@@ -78,7 +92,7 @@ export const logger = {
    * @param databaseUrl - Database URL (password will be masked)
    */
   dbConnectionError: (error: unknown, databaseUrl?: string) => {
-    const maskedUrl = databaseUrl?.replace(/:[^:@]+@/, ':***@');
+    const maskedUrl = maskPassword(databaseUrl);
     
     const details: Record<string, any> = {
       timestamp: new Date().toISOString(),
