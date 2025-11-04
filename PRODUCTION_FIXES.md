@@ -17,7 +17,7 @@ Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'better-sqlite3' imported from
 ```json
 "dependencies": {
   ...
-  "better-sqlite3": "^11.0.0",
+  "better-sqlite3": "^11.10.0",
   ...
 }
 ```
