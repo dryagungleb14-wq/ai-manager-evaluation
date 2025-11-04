@@ -9,5 +9,6 @@ vite.config.ts.*
 server/.env
 local.db
 local.db-shm
-local.db-wallocal.db.bak
+local.db-wal
+local.db.bak
 cookies.txt
