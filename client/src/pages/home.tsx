@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useState, useCallback } from "react";
 import { Phone, MessageCircle, Sparkles, History, Users } from "lucide-react";
 import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -58,9 +58,14 @@ export default function Home() {
   const { toast } = useToast();
 
   // Сброс отчёта при загрузке нового контента
-  const handleResetAnalysis = () => {
+  const handleResetAnalysis = useCallback(() => {
     setAnalysisReport(null);
-  };
+  }, []);
+
+  // Memoize the callback to prevent unnecessary re-renders of ChecklistSelector
+  const handleChecklistChange = useCallback((checklist: AnyChecklist) => {
+    setActiveChecklist(checklist);
+  }, []);
 
   const handleAnalyze = async () => {
     if (!activeChecklist) {
@@ -289,7 +294,7 @@ export default function Home() {
                 </Card>
               }
             >
-              <ChecklistSelector onChecklistChange={setActiveChecklist} />
+              <ChecklistSelector onChecklistChange={handleChecklistChange} />
             </Suspense>
           </aside>
         </div>

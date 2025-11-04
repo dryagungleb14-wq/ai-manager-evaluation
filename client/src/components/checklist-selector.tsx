@@ -112,7 +112,7 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
     if (checklist) {
       onChecklistChange(checklist);
     }
-    dropdown.close();
+    // Note: Radix UI Select automatically closes on selection, no need to call dropdown.close()
   };
 
   const handleExport = () => {
