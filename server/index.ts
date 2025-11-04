@@ -19,6 +19,7 @@ import { preTrialChecklist } from "./data/pre-trial-checklist.js";
 import { forUlyanaChecklist } from "./data/for-ulyana-checklist.js";
 import type { CorsOptions } from "./types/cors-options";
 import { getDatabase } from "./db.js";
+import { logger } from "./utils/logger.js";
 
 // Extend Express Session type to include user data
 declare module "express-session" {
@@ -197,8 +198,10 @@ async function createSessionStore(nodeEnv: string): Promise<session.Store | unde
       log("Session store: PostgreSQL (connect-pg-simple)", "session");
       return store;
     } catch (error) {
-      console.warn("[session] Failed to initialize PostgreSQL session store, falling back to MemoryStore");
-      console.warn(`[session] Error: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error('session', error, { 
+        operation: 'PostgreSQL session store initialization',
+        fallback: 'MemoryStore' 
+      });
       console.warn("[session] WARNING: Sessions will not persist across server restarts in DEGRADED MODE");
     }
   }
@@ -272,6 +275,26 @@ app.use((req, res, next) => {
 (async () => {
   await loadEnvConfig();
   await ensureServiceVersionLoaded();
+
+  // Validate DATABASE_URL format if it's set
+  if (process.env.DATABASE_URL) {
+    const dbUrl = process.env.DATABASE_URL;
+    
+    if (dbUrl.startsWith('ws://') || dbUrl.startsWith('wss://')) {
+      console.error('❌ DATABASE_URL uses WebSocket protocol. PostgreSQL requires postgresql:// protocol');
+      console.error(`   Current: ${dbUrl.replace(/:[^:@]+@/, ':***@')}`);
+      console.error('   Expected format: postgresql://user:password@host:port/database');
+      process.exit(1);
+    }
+    
+    if (!dbUrl.startsWith('postgresql://') && !dbUrl.startsWith('postgres://')) {
+      console.warn('⚠️  DATABASE_URL does not use postgresql:// or postgres:// protocol');
+      console.warn(`   Current: ${dbUrl.replace(/:[^:@]+@/, ':***@')}`);
+      console.warn('   Expected format: postgresql://user:password@host:port/database');
+    } else {
+      console.log('✅ DATABASE_URL format is valid');
+    }
+  }
 
   const nodeEnv = process.env.NODE_ENV ?? "production";
   app.set("env", nodeEnv);

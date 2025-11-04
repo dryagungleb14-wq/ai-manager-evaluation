@@ -85,26 +85,22 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  const buildRoot = path.resolve(import.meta.dirname);
-  const legacyPublicDir = path.resolve(buildRoot, "public");
-
-  let distPath = legacyPublicDir;
-
-  if (!fs.existsSync(path.resolve(distPath, "index.html"))) {
-    distPath = buildRoot;
-  }
+  // Correct path to the built frontend
+  // The build process puts the client build in the root dist directory
+  const distPath = path.resolve(import.meta.dirname, "..", "dist");
 
   if (!fs.existsSync(path.resolve(distPath, "index.html"))) {
     log(
-      `Static client build not found. Checked ${legacyPublicDir} and ${buildRoot}. API will run without serving the client bundle.`,
+      `❌ Static client build not found at ${distPath}. Run 'npm run build' first.`,
       "express",
     );
     return;
   }
 
+  log(`✅ Serving static files from ${distPath}`, "express");
   app.use(express.static(distPath));
 
-  // fall through to index.html if the file doesn't exist
+  // SPA fallback - serve index.html for all unmatched routes
   app.use("*", (_req, res) => {
     res.sendFile(path.resolve(distPath, "index.html"));
   });
