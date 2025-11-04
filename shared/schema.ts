@@ -217,6 +217,8 @@ export const checklists = pgTable("checklists", {
 
 export const analyses = pgTable("analyses", {
   id: serial("id").primaryKey(),
+  // Note: userId can be null for backward compatibility with existing data
+  // For new deployments, consider adding .notNull() after initial migration
   userId: integer("user_id").references(() => users.id),
   checklistId: integer("checklist_id").references(() => checklists.id),
   managerId: integer("manager_id").references(() => managers.id),
@@ -394,6 +396,8 @@ export const checklistHistory = pgTable("checklist_history", {
 
 export const advancedAnalyses = pgTable("advanced_analyses", {
   id: serial("id").primaryKey(),
+  // Note: userId can be null for backward compatibility with existing data
+  // For new deployments, consider adding .notNull() after initial migration
   userId: integer("user_id").references(() => users.id),
   checklistId: integer("checklist_id").references(() => advancedChecklists.id),
   managerId: integer("manager_id").references(() => managers.id),

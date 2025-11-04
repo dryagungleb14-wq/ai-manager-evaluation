@@ -5,7 +5,10 @@ import { eq } from "drizzle-orm";
 
 /**
  * Hash a password using SHA-256
- * Note: For production, use bcrypt or argon2
+ * 
+ * ⚠️ SECURITY NOTE: SHA-256 is used here for MVP simplicity.
+ * For production, use bcrypt, scrypt, or argon2 with proper salt.
+ * SHA-256 is vulnerable to rainbow table attacks and too fast for brute force protection.
  */
 export function hashPassword(password: string): string {
   return createHash("sha256").update(password).digest("hex");

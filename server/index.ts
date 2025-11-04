@@ -224,7 +224,12 @@ app.use((req, res, next) => {
   // Session middleware
   app.use(
     session({
-      secret: process.env.SESSION_SECRET || "ai-manager-eval-secret-change-in-production",
+      secret: process.env.SESSION_SECRET || (() => {
+        if (nodeEnv === "production") {
+          throw new Error("SESSION_SECRET must be set in production");
+        }
+        return "ai-manager-eval-secret-dev-only";
+      })(),
       resave: false,
       saveUninitialized: false,
       cookie: {
