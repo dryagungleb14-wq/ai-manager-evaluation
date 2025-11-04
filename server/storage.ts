@@ -1002,16 +1002,21 @@ class InMemoryStorage implements IStorage {
 
 function initializeStorage(): void {
   storage = new InMemoryStorage();
+  console.log("[storage] Initializing storage layer with in-memory fallback...");
 
   getDatabase()
     .then((client) => {
       databaseClient = client;
       storage = new DatabaseStorage(client);
       storageUsesDatabase = true;
+      console.log("[storage] Database connection successful. Using PostgreSQL/SQLite storage.");
     })
     .catch((error) => {
       storageInitializationError = error instanceof Error ? error : new Error(String(error));
       storageUsesDatabase = false;
+      console.warn("[storage] Database connection failed. Operating in DEGRADED MODE with in-memory storage.");
+      console.warn(`[storage] Error: ${storageInitializationError.message}`);
+      console.warn("[storage] Data will not persist across restarts. Consider fixing database connection.");
     });
 }
 

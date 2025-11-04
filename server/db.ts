@@ -18,6 +18,15 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
   const client = drizzle(sqlite, { schema }) as unknown as DatabaseClient;
 
   sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      password TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS managers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -40,6 +49,7 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
 
     CREATE TABLE IF NOT EXISTS analyses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
       checklist_id INTEGER,
       manager_id INTEGER,
       source TEXT NOT NULL CHECK (source IN ('call', 'correspondence')),
@@ -48,6 +58,7 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       checklist_report TEXT NOT NULL,
       objections_report TEXT NOT NULL,
       analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (checklist_id) REFERENCES checklists(id),
       FOREIGN KEY (manager_id) REFERENCES managers(id)
     );
@@ -93,6 +104,7 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
 
     CREATE TABLE IF NOT EXISTS advanced_analyses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
       checklist_id INTEGER,
       manager_id INTEGER,
       source TEXT NOT NULL CHECK (source IN ('call', 'correspondence')),
@@ -100,9 +112,18 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       transcript TEXT NOT NULL,
       report TEXT NOT NULL,
       analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (checklist_id) REFERENCES advanced_checklists(id),
       FOREIGN KEY (manager_id) REFERENCES managers(id)
     );
+
+    CREATE TABLE IF NOT EXISTS session (
+      sid TEXT PRIMARY KEY,
+      sess TEXT NOT NULL,
+      expire DATETIME NOT NULL
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_session_expire ON session(expire);
   `);
 
   return client;
