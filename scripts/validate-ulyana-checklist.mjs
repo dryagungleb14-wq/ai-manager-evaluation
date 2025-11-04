@@ -16,6 +16,16 @@ console.log('=== Validating "Для Ульяны" Checklist ===\n');
 
 // Read and parse the built server file to extract the checklist
 const distPath = join(__dirname, '..', 'dist', 'index.js');
+
+// Check if build exists
+try {
+  const stats = readFileSync(distPath);
+} catch (err) {
+  console.error('❌ Build file not found. Please run "npm run build" first.');
+  console.log('\nRun: npm run build');
+  process.exit(1);
+}
+
 const distContent = readFileSync(distPath, 'utf-8');
 
 // Find the checklist data in the built file
@@ -30,20 +40,29 @@ const totalScore = parseInt(checklistMatch[1], 10);
 console.log(`✓ Found checklist in built file`);
 console.log(`✓ Total Score: ${totalScore}`);
 
-// Extract stages count
-const stagesPattern = /stages:\s*\[([\s\S]*?)\],\s*\}/;
-const stagesMatch = distContent.match(stagesPattern);
+// Count stages - decode Unicode first
+let decodedContent = distContent.replace(/\\u([\da-fA-F]{4})/g, (match, grp) => 
+  String.fromCharCode(parseInt(grp, 16))
+);
 
-if (!stagesMatch) {
-  console.error('❌ Failed to extract stages');
-  process.exit(1);
-}
+const expectedStages = [
+  'Установление контакта',
+  'Квалификация',
+  'Выявление потребностей',
+  'Презентация',
+  'Работа с возражениями',
+  'Завершение сделки',
+  'Голосовые характеристики'
+];
 
-// Count stages by looking for "id:" patterns within stages
-const stageIds = stagesMatch[1].match(/id:\s*"[^"]+"/g);
-const stageCount = stageIds ? stageIds.length : 0;
+let stageCount = 0;
+expectedStages.forEach(stage => {
+  if (decodedContent.includes(stage)) {
+    stageCount++;
+  }
+});
 
-console.log(`✓ Stages: ${stageCount}`);
+console.log(`✓ Stages: ${stageCount}/${expectedStages.length}`);
 
 // Expected values
 const EXPECTED_TOTAL_SCORE = 13;
