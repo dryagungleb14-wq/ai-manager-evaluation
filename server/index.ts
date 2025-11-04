@@ -13,6 +13,7 @@ import {
   seedDefaultUsers,
   storageInitializationError,
   storageUsesDatabase,
+  waitForStorage,
 } from "./storage.js";
 import { preTrialChecklist } from "./data/pre-trial-checklist.js";
 import { forUlyanaChecklist } from "./data/for-ulyana-checklist.js";
@@ -304,6 +305,9 @@ app.use((req, res, next) => {
   const authGuard = createAuthGuard();
   log(`authentication guard ${authGuard.enabled ? "enabled" : "disabled"}`, "auth");
   app.use(authGuard);
+
+  // Wait for storage to be ready before checking status or seeding
+  await waitForStorage();
 
   // Log degraded mode status
   if (!storageUsesDatabase) {

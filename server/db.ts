@@ -15,7 +15,8 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
   const { drizzle } = await import("drizzle-orm/better-sqlite3");
 
   const sqlite = new Database("local.db");
-  const client = drizzle(sqlite, { schema }) as unknown as DatabaseClient;
+  // Don't pass schema to drizzle for SQLite - it uses PostgreSQL-specific functions
+  const client = drizzle(sqlite) as unknown as DatabaseClient;
 
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS users (

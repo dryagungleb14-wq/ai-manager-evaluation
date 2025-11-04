@@ -1000,11 +1000,13 @@ class InMemoryStorage implements IStorage {
 }
 
 
+let storageReadyPromise: Promise<void>;
+
 function initializeStorage(): void {
   storage = new InMemoryStorage();
   console.log("[storage] Initializing storage layer with in-memory fallback...");
 
-  getDatabase()
+  storageReadyPromise = getDatabase()
     .then((client) => {
       databaseClient = client;
       storage = new DatabaseStorage(client);
@@ -1022,80 +1024,108 @@ function initializeStorage(): void {
 
 initializeStorage();
 
+/**
+ * Wait for storage to be initialized (either database or in-memory fallback)
+ * This should be called before seeding or using storage to ensure it's ready
+ */
+export async function waitForStorage(): Promise<void> {
+  await storageReadyPromise;
+}
+
 // Seed function to initialize default managers
 export async function seedDefaultManagers(): Promise<void> {
-  const existing = await storage.getManagers();
-  
-  if (existing.length === 0) {
-    console.log("Seeding database with default managers...");
+  try {
+    const existing = await storage.getManagers();
     
-    const defaultManagers = [
-      { name: "Алексей Смирнов", phone: "+7 (915) 123-45-67", email: "a.smirnov@company.ru", teamLead: "Иванов И.И.", department: "Продажи B2B" },
-      { name: "Мария Петрова", phone: "+7 (916) 234-56-78", email: "m.petrova@company.ru", teamLead: "Иванов И.И.", department: "Продажи B2B" },
-      { name: "Дмитрий Ковалёв", phone: "+7 (917) 345-67-89", email: "d.kovalev@company.ru", teamLead: "Иванов И.И.", department: "Продажи B2B" },
-      { name: "Елена Соколова", phone: "+7 (918) 456-78-90", email: "e.sokolova@company.ru", teamLead: "Сидоров С.С.", department: "Продажи B2C" },
-      { name: "Иван Новиков", phone: "+7 (919) 567-89-01", email: "i.novikov@company.ru", teamLead: "Сидоров С.С.", department: "Продажи B2C" },
-      { name: "Ольга Морозова", phone: "+7 (920) 678-90-12", email: "o.morozova@company.ru", teamLead: "Сидоров С.С.", department: "Продажи B2C" },
-      { name: "Сергей Волков", phone: "+7 (921) 789-01-23", email: "s.volkov@company.ru", teamLead: "Кузнецов К.К.", department: "Поддержка" },
-      { name: "Анна Федорова", phone: "+7 (922) 890-12-34", email: "a.fedorova@company.ru", teamLead: "Кузнецов К.К.", department: "Поддержка" },
-    ];
-    
-    for (const manager of defaultManagers) {
-      await storage.createManager(manager);
+    if (existing.length === 0) {
+      console.log("Seeding database with default managers...");
+      
+      const defaultManagers = [
+        { name: "Алексей Смирнов", phone: "+7 (915) 123-45-67", email: "a.smirnov@company.ru", teamLead: "Иванов И.И.", department: "Продажи B2B" },
+        { name: "Мария Петрова", phone: "+7 (916) 234-56-78", email: "m.petrova@company.ru", teamLead: "Иванов И.И.", department: "Продажи B2B" },
+        { name: "Дмитрий Ковалёв", phone: "+7 (917) 345-67-89", email: "d.kovalev@company.ru", teamLead: "Иванов И.И.", department: "Продажи B2B" },
+        { name: "Елена Соколова", phone: "+7 (918) 456-78-90", email: "e.sokolova@company.ru", teamLead: "Сидоров С.С.", department: "Продажи B2C" },
+        { name: "Иван Новиков", phone: "+7 (919) 567-89-01", email: "i.novikov@company.ru", teamLead: "Сидоров С.С.", department: "Продажи B2C" },
+        { name: "Ольга Морозова", phone: "+7 (920) 678-90-12", email: "o.morozova@company.ru", teamLead: "Сидоров С.С.", department: "Продажи B2C" },
+        { name: "Сергей Волков", phone: "+7 (921) 789-01-23", email: "s.volkov@company.ru", teamLead: "Кузнецов К.К.", department: "Поддержка" },
+        { name: "Анна Федорова", phone: "+7 (922) 890-12-34", email: "a.fedorova@company.ru", teamLead: "Кузнецов К.К.", department: "Поддержка" },
+      ];
+      
+      for (const manager of defaultManagers) {
+        await storage.createManager(manager);
+      }
+      
+      console.log(`Seeded ${defaultManagers.length} default managers`);
     }
-    
-    console.log(`Seeded ${defaultManagers.length} default managers`);
+  } catch (error) {
+    console.warn("[storage] Failed to seed managers:", error instanceof Error ? error.message : String(error));
+    console.warn("[storage] Continuing with empty managers database");
   }
 }
 
 // Seed function to initialize default users for authentication
 export async function seedDefaultUsers(): Promise<void> {
-  const db = await getDatabase();
-  
-  const existing = await db.select().from(users);
-  
-  if (existing.length === 0) {
-    console.log("Seeding database with default users...");
+  try {
+    const db = await getDatabase();
     
-    const { createUser } = await import("./services/auth.js");
+    const existing = await db.select().from(users);
     
-    // Create admin user
-    await createUser("admin", "admin123", "admin");
-    console.log("Created admin user (username: admin, password: admin123)");
-    
-    // Create two test users for managers
-    await createUser("manager1", "manager123", "user");
-    console.log("Created manager1 user (username: manager1, password: manager123)");
-    
-    await createUser("manager2", "manager123", "user");
-    console.log("Created manager2 user (username: manager2, password: manager123)");
-    
-    console.log("Seeded 3 default users (1 admin, 2 managers)");
+    if (existing.length === 0) {
+      console.log("Seeding database with default users...");
+      
+      const { createUser } = await import("./services/auth.js");
+      
+      // Create admin user
+      await createUser("admin", "admin123", "admin");
+      console.log("Created admin user (username: admin, password: admin123)");
+      
+      // Create two test users for managers
+      await createUser("manager1", "manager123", "user");
+      console.log("Created manager1 user (username: manager1, password: manager123)");
+      
+      await createUser("manager2", "manager123", "user");
+      console.log("Created manager2 user (username: manager2, password: manager123)");
+      
+      console.log("Seeded 3 default users (1 admin, 2 managers)");
+    }
+  } catch (error) {
+    console.warn("[storage] Failed to seed users:", error instanceof Error ? error.message : String(error));
+    console.warn("[storage] Continuing without seeded users - use in-memory users for authentication");
   }
 }
 
 // Seed function to initialize default checklists
 export async function seedDefaultChecklists(defaultChecklists: Checklist[]): Promise<void> {
-  const existing = await storage.getChecklists();
-  
-  if (existing.length === 0) {
-    console.log("Seeding database with default checklists...");
-    for (const checklist of defaultChecklists) {
-      await storage.createChecklist(checklist);
+  try {
+    const existing = await storage.getChecklists();
+    
+    if (existing.length === 0) {
+      console.log("Seeding database with default checklists...");
+      for (const checklist of defaultChecklists) {
+        await storage.createChecklist(checklist);
+      }
+      console.log(`Seeded ${defaultChecklists.length} default checklists`);
     }
-    console.log(`Seeded ${defaultChecklists.length} default checklists`);
+  } catch (error) {
+    console.warn("[storage] Failed to seed checklists:", error instanceof Error ? error.message : String(error));
+    console.warn("[storage] Continuing with empty checklist database");
   }
 }
 
 // Seed function to initialize default advanced checklists
 export async function seedDefaultAdvancedChecklists(defaultAdvancedChecklists: AdvancedChecklist[]): Promise<void> {
-  const existing = await storage.getAdvancedChecklists();
-  
-  if (existing.length === 0) {
-    console.log("Seeding database with default advanced checklists...");
-    for (const checklist of defaultAdvancedChecklists) {
-      await storage.createAdvancedChecklist(checklist);
+  try {
+    const existing = await storage.getAdvancedChecklists();
+    
+    if (existing.length === 0) {
+      console.log("Seeding database with default advanced checklists...");
+      for (const checklist of defaultAdvancedChecklists) {
+        await storage.createAdvancedChecklist(checklist);
+      }
+      console.log(`Seeded ${defaultAdvancedChecklists.length} default advanced checklists`);
     }
-    console.log(`Seeded ${defaultAdvancedChecklists.length} default advanced checklists`);
+  } catch (error) {
+    console.warn("[storage] Failed to seed advanced checklists:", error instanceof Error ? error.message : String(error));
+    console.warn("[storage] Continuing with empty advanced checklist database");
   }
 }
