@@ -47,6 +47,8 @@ export function ChecklistSelector({ onChecklistChange }: ChecklistSelectorProps)
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const { toast } = useToast();
+  // Use dropdown controller to coordinate with other dropdowns on the page (e.g., manager-selector)
+  // This ensures only one dropdown is open at a time for better UX
   const dropdown = useDropdownController("checklist-selector");
 
   // Fetch simple checklists from API
