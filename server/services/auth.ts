@@ -28,7 +28,7 @@ export async function authenticateUser(
   username: string,
   password: string
 ): Promise<DbUser | null> {
-  const db = getDatabase();
+  const db = await getDatabase();
   
   const [user] = await db
     .select()
@@ -51,7 +51,7 @@ export async function authenticateUser(
  * Get user by ID
  */
 export async function getUserById(id: number): Promise<DbUser | null> {
-  const db = getDatabase();
+  const db = await getDatabase();
   
   const [user] = await db
     .select()
@@ -70,7 +70,7 @@ export async function createUser(
   password: string,
   role: "admin" | "user" = "user"
 ): Promise<DbUser> {
-  const db = getDatabase();
+  const db = await getDatabase();
   
   const hashedPassword = hashPassword(password);
   

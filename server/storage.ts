@@ -1045,7 +1045,7 @@ export async function seedDefaultManagers(): Promise<void> {
 
 // Seed function to initialize default users for authentication
 export async function seedDefaultUsers(): Promise<void> {
-  const db = getDatabase();
+  const db = await getDatabase();
   
   const existing = await db.select().from(users);
   
