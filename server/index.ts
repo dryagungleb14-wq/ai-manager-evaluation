@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction, type RequestHandler } from "express";
+import session from "express-session";
 import cors from "cors";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -9,12 +10,22 @@ import {
   seedDefaultChecklists,
   seedDefaultAdvancedChecklists,
   seedDefaultManagers,
+  seedDefaultUsers,
   storageInitializationError,
   storageUsesDatabase,
 } from "./storage.js";
 import { preTrialChecklist } from "./data/pre-trial-checklist.js";
 import { forUlyanaChecklist } from "./data/for-ulyana-checklist.js";
 import type { CorsOptions } from "./types/cors-options";
+
+// Extend Express Session type to include user data
+declare module "express-session" {
+  interface SessionData {
+    userId?: number;
+    username?: string;
+    role?: "admin" | "user";
+  }
+}
 
 const app = express();
 
@@ -210,6 +221,26 @@ app.use((req, res, next) => {
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
 
+  // Session middleware
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET || (() => {
+        if (nodeEnv === "production") {
+          throw new Error("SESSION_SECRET must be set in production");
+        }
+        return "ai-manager-eval-secret-dev-only";
+      })(),
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: nodeEnv === "production",
+        httpOnly: true,
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+        sameSite: nodeEnv === "production" ? "strict" : "lax",
+      },
+    })
+  );
+
   const authGuard = createAuthGuard();
   log(`authentication guard ${authGuard.enabled ? "enabled" : "disabled"}`, "auth");
   app.use(authGuard);
@@ -351,6 +382,7 @@ app.use((req, res, next) => {
   await seedDefaultChecklists(defaultChecklists);
   await seedDefaultAdvancedChecklists([preTrialChecklist, forUlyanaChecklist]);
   await seedDefaultManagers();
+  await seedDefaultUsers();
   
   await registerRoutes(app);
 

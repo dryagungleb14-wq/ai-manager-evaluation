@@ -59,6 +59,90 @@ const uploadChecklist = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<void> {
+  // Authentication routes
+  
+  // POST /api/auth/login - User login
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+
+      if (!username || !password) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Username and password are required" 
+        });
+      }
+
+      const { authenticateUser } = await import("./services/auth.js");
+      const user = await authenticateUser(username, password);
+
+      if (!user) {
+        console.log(`[auth] Failed login attempt for username: ${username}`);
+        return res.status(401).json({ 
+          success: false, 
+          message: "Invalid username or password" 
+        });
+      }
+
+      // Store user info in session
+      req.session.userId = user.id;
+      req.session.username = user.username;
+      req.session.role = user.role;
+
+      console.log(`[auth] User logged in: ${user.username} (role: ${user.role}, id: ${user.id})`);
+
+      res.json({
+        success: true,
+        user: {
+          id: user.id.toString(),
+          username: user.username,
+          role: user.role,
+        },
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Internal server error" 
+      });
+    }
+  });
+
+  // POST /api/auth/logout - User logout
+  app.post("/api/auth/logout", (req, res) => {
+    const username = req.session.username;
+    req.session.destroy((err) => {
+      if (err) {
+        console.error("Logout error:", err);
+        return res.status(500).json({ 
+          success: false, 
+          message: "Logout failed" 
+        });
+      }
+      
+      console.log(`[auth] User logged out: ${username}`);
+      res.json({ success: true });
+    });
+  });
+
+  // GET /api/auth/me - Get current user
+  app.get("/api/auth/me", (req, res) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ 
+        authenticated: false 
+      });
+    }
+
+    res.json({
+      authenticated: true,
+      user: {
+        id: req.session.userId.toString(),
+        username: req.session.username,
+        role: req.session.role,
+      },
+    });
+  });
+
   // POST /api/transcribe - Транскрибация аудио
   app.post("/api/transcribe", upload.single("file"), async (req, res) => {
     try {
@@ -125,6 +209,10 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       const { transcript, checklist, language = "ru", managerId } = validatedRequest;
       const source = (req.body.source as "call" | "correspondence") || "call";
+      const userId = req.session.userId?.toString();
+
+      // Log analysis start with user info
+      console.log(`[analysis] User ${req.session.username} (id: ${userId}) starting analysis with checklist: ${checklist.name}`);
 
       // Extract text from transcript if it's an object
       let textToAnalyze = transcript;
@@ -147,13 +235,16 @@ export async function registerRoutes(app: Express): Promise<void> {
         language
       );
 
-      // Save analysis to database with managerId
+      // Save analysis to database with managerId and userId
       const analysisId = await storage.saveAnalysis(
         result,
         checklist.id,
         textToAnalyze,
-        managerId ?? undefined
+        managerId ?? undefined,
+        userId
       );
+
+      console.log(`[analysis] Analysis completed for user ${req.session.username}, saved with ID: ${analysisId}`);
 
       // Return result with analysis ID
       res.json({
@@ -332,6 +423,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   app.post("/api/advanced-checklists/analyze", async (req, res) => {
     try {
       const { transcript, checklistId, language = "ru", managerId, source = "call" } = req.body;
+      const userId = req.session.userId?.toString();
 
       if (!transcript || !checklistId) {
         return res.status(400).json({ error: "Требуются transcript и checklistId" });
@@ -342,6 +434,9 @@ export async function registerRoutes(app: Express): Promise<void> {
       if (!checklist) {
         return res.status(404).json({ error: "Чек-лист не найден" });
       }
+
+      // Log analysis start with user info
+      console.log(`[analysis] User ${req.session.username} (id: ${userId}) starting advanced analysis with checklist: ${checklist.name}`);
 
       // Extract text from transcript if it's an object
       let textToAnalyze = transcript;
@@ -357,15 +452,18 @@ export async function registerRoutes(app: Express): Promise<void> {
         language
       );
 
-      // Save analysis
+      // Save analysis with userId
       const analysisId = await storage.saveAdvancedAnalysis(
         result,
         checklistId,
         textToAnalyze,
         managerId,
         source,
-        language
+        language,
+        userId
       );
+
+      console.log(`[analysis] Advanced analysis completed for user ${req.session.username}, saved with ID: ${analysisId}`);
 
       res.json({
         ...result,
@@ -388,10 +486,16 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  // GET /api/advanced-analyses - Получить историю продвинутых анализов
+  // GET /api/advanced-analyses - Получить историю продвинутых анализов (с фильтрацией для обычных пользователей)
   app.get("/api/advanced-analyses", async (req, res) => {
     try {
-      const analyses = await storage.getAllAdvancedAnalyses();
+      const userRole = req.session.role;
+      const userId = req.session.userId?.toString();
+      
+      // Admin can see all analyses, users can only see their own
+      const filterUserId = userRole === "admin" ? undefined : userId;
+      
+      const analyses = await storage.getAllAdvancedAnalyses(filterUserId);
       res.json(analyses);
     } catch (error) {
       console.error("Get advanced analyses error:", error);
@@ -493,10 +597,16 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  // GET /api/analyses - Получить все анализы
+  // GET /api/analyses - Получить все анализы (с фильтрацией для обычных пользователей)
   app.get("/api/analyses", async (req, res) => {
     try {
-      const analyses = await storage.getAllAnalyses();
+      const userRole = req.session.role;
+      const userId = req.session.userId?.toString();
+      
+      // Admin can see all analyses, users can only see their own
+      const filterUserId = userRole === "admin" ? undefined : userId;
+      
+      const analyses = await storage.getAllAnalyses(filterUserId);
       res.json(analyses);
     } catch (error) {
       console.error("Get analyses error:", error);

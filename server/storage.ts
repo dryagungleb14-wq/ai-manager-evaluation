@@ -6,6 +6,7 @@ import {
   checklists, 
   analyses, 
   managers,
+  users,
   AdvancedChecklist,
   AdvancedChecklistReport,
   advancedChecklists,
@@ -19,6 +20,7 @@ import { getDatabase, type DatabaseClient } from "./db.js";
 
 export type StoredAnalysis = {
   id: string;
+  userId?: string;
   checklistId?: string;
   managerId?: string;
   source: "call" | "correspondence";
@@ -31,6 +33,7 @@ export type StoredAnalysis = {
 
 export type StoredAdvancedAnalysis = {
   id: string;
+  userId?: string;
   checklistId?: string;
   managerId?: string;
   source: "call" | "correspondence";
@@ -72,10 +75,11 @@ export interface IStorage {
     analysis: AnalysisReport, 
     checklistId?: string, 
     transcript?: string,
-    managerId?: string
+    managerId?: string,
+    userId?: string
   ): Promise<string>;
   getAnalysis(id: string): Promise<AnalysisReport | undefined>;
-  getAllAnalyses(): Promise<StoredAnalysis[]>;
+  getAllAnalyses(userId?: string): Promise<StoredAnalysis[]>;
   deleteAnalysis(id: string): Promise<boolean>;
   
   // Advanced Analysis history
@@ -85,10 +89,11 @@ export interface IStorage {
     transcript?: string,
     managerId?: string,
     source?: "call" | "correspondence",
-    language?: string
+    language?: string,
+    userId?: string
   ): Promise<string>;
   getAdvancedAnalysis(id: string): Promise<AdvancedChecklistReport | undefined>;
-  getAllAdvancedAnalyses(): Promise<StoredAdvancedAnalysis[]>;
+  getAllAdvancedAnalyses(userId?: string): Promise<StoredAdvancedAnalysis[]>;
   deleteAdvancedAnalysis(id: string): Promise<boolean>;
 }
 
@@ -303,7 +308,8 @@ export class DatabaseStorage implements IStorage {
     analysis: AnalysisReport, 
     checklistId?: string,
     transcript?: string,
-    managerId?: string
+    managerId?: string,
+    userId?: string
   ): Promise<string> {
     // Only use checklistId if it's a valid numeric ID
     let numericChecklistId: number | null = null;
@@ -323,9 +329,19 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    // Only use userId if it's a valid numeric ID
+    let numericUserId: number | null = null;
+    if (userId) {
+      const parsed = parseInt(userId, 10);
+      if (!isNaN(parsed)) {
+        numericUserId = parsed;
+      }
+    }
+
     const [saved] = await this.db
       .insert(analyses)
       .values({
+        userId: numericUserId,
         checklistId: numericChecklistId,
         managerId: numericManagerId,
         source: analysis.checklistReport.meta.source,
@@ -356,15 +372,26 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getAllAnalyses(): Promise<StoredAnalysis[]> {
-    const allAnalyses = await this.db
+  async getAllAnalyses(userId?: string): Promise<StoredAnalysis[]> {
+    let query = this.db
       .select()
-      .from(analyses)
+      .from(analyses);
+
+    // Filter by userId if provided
+    if (userId) {
+      const numericUserId = parseInt(userId, 10);
+      if (!isNaN(numericUserId)) {
+        query = query.where(eq(analyses.userId, numericUserId)) as any;
+      }
+    }
+
+    const allAnalyses = await query
       .orderBy(desc(analyses.analyzedAt))
-      .limit(10);
+      .limit(100); // Increased limit for admin view
 
     return allAnalyses.map((analysis: {
       id: number;
+      userId: number | null;
       checklistId: number | null;
       managerId: number | null;
       source: "call" | "correspondence";
@@ -375,6 +402,7 @@ export class DatabaseStorage implements IStorage {
       objectionsReport: AnalysisReport["objectionsReport"];
     }) => ({
       id: analysis.id.toString(),
+      userId: analysis.userId?.toString(),
       checklistId: analysis.checklistId?.toString(),
       managerId: analysis.managerId?.toString(),
       source: analysis.source,
@@ -634,7 +662,8 @@ export class DatabaseStorage implements IStorage {
     transcript?: string,
     managerId?: string,
     source: "call" | "correspondence" = "call",
-    language: string = "ru"
+    language: string = "ru",
+    userId?: string
   ): Promise<string> {
     let numericChecklistId: number | null = null;
     if (checklistId) {
@@ -652,9 +681,18 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    let numericUserId: number | null = null;
+    if (userId) {
+      const parsed = parseInt(userId, 10);
+      if (!isNaN(parsed)) {
+        numericUserId = parsed;
+      }
+    }
+
     const [saved] = await this.db
       .insert(advancedAnalyses)
       .values({
+        userId: numericUserId,
         checklistId: numericChecklistId,
         managerId: numericManagerId,
         source,
@@ -681,15 +719,26 @@ export class DatabaseStorage implements IStorage {
     return analysis.report;
   }
 
-  async getAllAdvancedAnalyses(): Promise<StoredAdvancedAnalysis[]> {
-    const allAnalyses = await this.db
+  async getAllAdvancedAnalyses(userId?: string): Promise<StoredAdvancedAnalysis[]> {
+    let query = this.db
       .select()
-      .from(advancedAnalyses)
+      .from(advancedAnalyses);
+
+    // Filter by userId if provided
+    if (userId) {
+      const numericUserId = parseInt(userId, 10);
+      if (!isNaN(numericUserId)) {
+        query = query.where(eq(advancedAnalyses.userId, numericUserId)) as any;
+      }
+    }
+
+    const allAnalyses = await query
       .orderBy(desc(advancedAnalyses.analyzedAt))
-      .limit(10);
+      .limit(100); // Increased limit for admin view
 
     return allAnalyses.map((analysis: any) => ({
       id: analysis.id.toString(),
+      userId: analysis.userId?.toString(),
       checklistId: analysis.checklistId?.toString(),
       managerId: analysis.managerId?.toString(),
       source: analysis.source,
@@ -817,10 +866,12 @@ class InMemoryStorage implements IStorage {
     checklistId?: string,
     transcript?: string,
     managerId?: string,
+    userId?: string
   ): Promise<string> {
     const id = String(this.analysisCounter++);
     const stored: StoredAnalysis & { transcript: string; report: AnalysisReport } = {
       id,
+      userId,
       checklistId,
       managerId,
       source: analysis.checklistReport.meta.source,
@@ -840,8 +891,15 @@ class InMemoryStorage implements IStorage {
     return stored ? stored.report : undefined;
   }
 
-  async getAllAnalyses(): Promise<StoredAnalysis[]> {
-    return Array.from(this.analysesStore.values()).map(({ report, transcript, ...rest }) => ({
+  async getAllAnalyses(userId?: string): Promise<StoredAnalysis[]> {
+    let analyses = Array.from(this.analysesStore.values());
+    
+    // Filter by userId if provided
+    if (userId) {
+      analyses = analyses.filter(a => a.userId === userId);
+    }
+    
+    return analyses.map(({ report, transcript, ...rest }) => ({
       ...rest,
       transcript,
     }));
@@ -901,11 +959,13 @@ class InMemoryStorage implements IStorage {
     transcript?: string,
     managerId?: string,
     source: "call" | "correspondence" = "call",
-    language: string = "ru"
+    language: string = "ru",
+    userId?: string
   ): Promise<string> {
     const id = String(this.advancedAnalysisCounter++);
     const stored: StoredAdvancedAnalysis = {
       id,
+      userId,
       checklistId,
       managerId,
       source,
@@ -923,8 +983,15 @@ class InMemoryStorage implements IStorage {
     return stored ? stored.report : undefined;
   }
 
-  async getAllAdvancedAnalyses(): Promise<StoredAdvancedAnalysis[]> {
-    return Array.from(this.advancedAnalysesStore.values()).map(analysis => ({ ...analysis }));
+  async getAllAdvancedAnalyses(userId?: string): Promise<StoredAdvancedAnalysis[]> {
+    let analyses = Array.from(this.advancedAnalysesStore.values());
+    
+    // Filter by userId if provided
+    if (userId) {
+      analyses = analyses.filter(a => a.userId === userId);
+    }
+    
+    return analyses.map(analysis => ({ ...analysis }));
   }
 
   async deleteAdvancedAnalysis(id: string): Promise<boolean> {
@@ -973,6 +1040,32 @@ export async function seedDefaultManagers(): Promise<void> {
     }
     
     console.log(`Seeded ${defaultManagers.length} default managers`);
+  }
+}
+
+// Seed function to initialize default users for authentication
+export async function seedDefaultUsers(): Promise<void> {
+  const db = getDatabase();
+  
+  const existing = await db.select().from(users);
+  
+  if (existing.length === 0) {
+    console.log("Seeding database with default users...");
+    
+    const { createUser } = await import("./services/auth.js");
+    
+    // Create admin user
+    await createUser("admin", "admin123", "admin");
+    console.log("Created admin user (username: admin, password: admin123)");
+    
+    // Create two test users for managers
+    await createUser("manager1", "manager123", "user");
+    console.log("Created manager1 user (username: manager1, password: manager123)");
+    
+    await createUser("manager2", "manager123", "user");
+    console.log("Created manager2 user (username: manager2, password: manager123)");
+    
+    console.log("Seeded 3 default users (1 admin, 2 managers)");
   }
 }
 
