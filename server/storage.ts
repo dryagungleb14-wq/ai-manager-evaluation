@@ -596,7 +596,7 @@ export class DatabaseStorage implements IStorage {
             title: criterion.title,
             description: criterion.description,
             weight: criterion.weight,
-            isBinary: criterion.isBinary || false,
+            isBinary: criterion.isBinary ? 1 : 0,
             levels: JSON.stringify({
               max: criterion.max,
               mid: criterion.mid,
@@ -612,9 +612,9 @@ export class DatabaseStorage implements IStorage {
       .values({
         checklistId: created.id,
         action: "created",
-        // changes: null,
-        // userId: null,
-        // timestamp: now,
+        changes: null,
+        userId: null,
+        timestamp: now,
       });
 
     return this.getAdvancedChecklistWithStages(created.id.toString()) as Promise<AdvancedChecklist>;
