@@ -41,21 +41,28 @@ export const storage = new Storage();
 // Seed function to initialize default advanced checklists
 export async function seedDefaultAdvancedChecklists(): Promise<void> {
   try {
+    console.log('[storage] Starting to seed default advanced checklists...');
     const existing = await storage.getAdvancedChecklists();
     const checklistIds = new Set(existing.map((c) => c.id));
+    
     // Сидируем оба чек-листа глобально (без userId/ownerId)
     const checklistsToAdd = [beforeTrialChecklist, forUlyanaChecklist].filter((c) => !checklistIds.has(c.id));
+    
     if (checklistsToAdd.length > 0) {
-      console.log(`Seeding database with ${checklistsToAdd.length} advanced checklists...`);
+      console.log(`[storage] Seeding database with ${checklistsToAdd.length} advanced checklists...`);
       for (const checklist of checklistsToAdd) {
+        console.log(`[storage] Creating advanced checklist: ${checklist.id}`);
         await storage.createAdvancedChecklist(checklist);
       }
-      console.log(`Seeded ${checklistsToAdd.length} advanced checklists`);
+      console.log(`[storage] Successfully seeded ${checklistsToAdd.length} advanced checklists`);
     } else {
-      console.log("All default advanced checklists already exist in database");
+      console.log("[storage] All default advanced checklists already exist in database");
     }
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[storage] CRITICAL ERROR seeding advanced checklists: ${errorMessage}`);
     logger.error('storage', error, { operation: 'seedAdvancedChecklists' });
-    console.warn("[storage] Continuing with empty advanced checklist database");
+    // Re-throw the error so deployment fails and alerts the user
+    throw new Error(`Failed to seed advanced checklists: ${errorMessage}`);
   }
 }
