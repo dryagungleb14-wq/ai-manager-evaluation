@@ -44,8 +44,19 @@ class Storage {
     return this.dbPromise;
   }
 
-  private safeParse(value: any): any {
-    return typeof value === 'string' ? JSON.parse(value) : value;
+  private safeParse<T = any>(value: T | string): T {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value) as T;
+      } catch (error) {
+        logger.error('storage', error, { 
+          operation: 'safeParse', 
+          value: value.substring(0, 100) 
+        });
+        throw new Error(`Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    return value as T;
   }
 
   // Analysis methods (simple checklists)
