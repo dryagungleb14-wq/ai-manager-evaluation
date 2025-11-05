@@ -84,7 +84,6 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
 async function createRemoteDatabase(): Promise<DatabaseClient> {
   const { Pool } = await import("pg");
   const { drizzle } = await import("drizzle-orm/node-postgres");
-  const { migrate } = await import("drizzle-orm/node-postgres/migrator");
 
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
@@ -95,21 +94,81 @@ async function createRemoteDatabase(): Promise<DatabaseClient> {
       connectionString: process.env.DATABASE_URL
     });
 
+    // Create tables directly for PostgreSQL
+    console.log("Creating database tables for PostgreSQL...");
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          username VARCHAR(255) NOT NULL UNIQUE,
+          password VARCHAR(255) NOT NULL,
+          role VARCHAR(50) NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS managers (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          phone VARCHAR(50),
+          email VARCHAR(255),
+          team_lead VARCHAR(255),
+          department VARCHAR(255),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS checklists (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          version VARCHAR(50) NOT NULL DEFAULT '1.0',
+          items TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS analyses (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER,
+          checklist_id INTEGER,
+          manager_id INTEGER,
+          source VARCHAR(50) NOT NULL CHECK (source IN ('call', 'correspondence')),
+          language VARCHAR(10) NOT NULL DEFAULT 'ru',
+          transcript TEXT NOT NULL,
+          checklist_report TEXT NOT NULL,
+          objections_report TEXT NOT NULL,
+          analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id),
+          FOREIGN KEY (checklist_id) REFERENCES checklists(id),
+          FOREIGN KEY (manager_id) REFERENCES managers(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS advanced_checklists (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          version VARCHAR(50) NOT NULL,
+          total_score INTEGER NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS session (
+          sid VARCHAR(255) PRIMARY KEY,
+          sess TEXT NOT NULL,
+          expire TIMESTAMP NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_session_expire ON session(expire);
+      `);
+      console.log("Database tables created successfully");
+    } catch (tableError) {
+      console.log("Table creation info:", tableError instanceof Error ? tableError.message : tableError);
+    }
+
     const client = drizzle({
       client: pool,
       schema
     }) as unknown as DatabaseClient;
-
-    // Run migrations to create tables
-    console.log("Running migrations for PostgreSQL...");
-    try {
-      await migrate(client, { migrationsFolder: "./migrations" });
-      console.log("Migrations completed successfully");
-    } catch (migrationError) {
-      console.warn("Migration error (continuing with schema creation):", migrationError);
-      // If migrations fail, try creating tables directly using Drizzle schema
-      console.log("Attempting to create tables using Drizzle schema...");
-    }
 
     return client;
   } catch (error) {
