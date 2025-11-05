@@ -35,6 +35,7 @@ export interface StoredAnalysis {
 
 class Storage {
   private dbPromise: Promise<DatabaseClient>;
+  private static readonly MAX_LOG_VALUE_LENGTH = 100;
 
   constructor() {
     this.dbPromise = getDatabase();
@@ -42,6 +43,21 @@ class Storage {
 
   private async getDb(): Promise<DatabaseClient> {
     return this.dbPromise;
+  }
+
+  private safeParse<T = any>(value: T | string): T {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value) as T;
+      } catch (error) {
+        logger.error('storage', error, { 
+          operation: 'safeParse', 
+          value: value.substring(0, Storage.MAX_LOG_VALUE_LENGTH) 
+        });
+        throw new Error(`Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    return value as T;
   }
 
   // Analysis methods (simple checklists)
@@ -122,8 +138,8 @@ class Storage {
 
       return {
         ...result,
-        checklistReport: JSON.parse(result.checklistReport as string),
-        objectionsReport: JSON.parse(result.objectionsReport as string),
+        checklistReport: this.safeParse(result.checklistReport),
+        objectionsReport: this.safeParse(result.objectionsReport),
       };
     } catch (error) {
       logger.error('storage', error, { operation: 'getAnalysis', id });
@@ -144,8 +160,8 @@ class Storage {
       
       return results.map((r: any) => ({
         ...r,
-        checklistReport: JSON.parse(r.checklistReport),
-        objectionsReport: JSON.parse(r.objectionsReport),
+        checklistReport: this.safeParse(r.checklistReport),
+        objectionsReport: this.safeParse(r.objectionsReport),
       }));
     } catch (error) {
       logger.error('storage', error, { operation: 'getAllAnalyses' });
@@ -178,7 +194,7 @@ class Storage {
         id: inserted.id.toString(),
         name: inserted.name,
         version: inserted.version,
-        items: JSON.parse(inserted.items as string),
+        items: this.safeParse(inserted.items),
       };
     } catch (error) {
       logger.error('storage', error, { operation: 'createChecklist', checklist });
@@ -194,7 +210,7 @@ class Storage {
         id: r.id.toString(),
         name: r.name,
         version: r.version,
-        items: JSON.parse(r.items),
+        items: this.safeParse(r.items),
       }));
     } catch (error) {
       logger.error('storage', error, { operation: 'getChecklists' });
@@ -217,7 +233,7 @@ class Storage {
       return {
         ...result,
         id: result.id.toString(),
-        items: JSON.parse(result.items as string),
+        items: this.safeParse(result.items),
       };
     } catch (error) {
       logger.error('storage', error, { operation: 'getChecklist', id });
@@ -247,7 +263,7 @@ class Storage {
         id: updated.id.toString(),
         name: updated.name,
         version: updated.version,
-        items: JSON.parse(updated.items as string),
+        items: this.safeParse(updated.items),
       };
     } catch (error) {
       logger.error('storage', error, { operation: 'updateChecklist', id });
@@ -464,7 +480,7 @@ class Storage {
         .where(eq(advancedAnalyses.checklistId, parseInt(checklistId)))
         .orderBy(desc(advancedAnalyses.analyzedAt));
       
-      return results.map((r: any) => JSON.parse(r.report));
+      return results.map((r: any) => this.safeParse(r.report));
     } catch (error) {
       logger.error('storage', error, { operation: 'getAdvancedChecklistReports' });
       throw error;
@@ -516,7 +532,7 @@ class Storage {
 
       return {
         ...result,
-        report: JSON.parse(result.report as string),
+        report: this.safeParse(result.report),
       };
     } catch (error) {
       logger.error('storage', error, { operation: 'getAdvancedAnalysis', id });
@@ -537,7 +553,7 @@ class Storage {
       
       return results.map((r: any) => ({
         ...r,
-        report: JSON.parse(r.report),
+        report: this.safeParse(r.report),
       }));
     } catch (error) {
       logger.error('storage', error, { operation: 'getAllAdvancedAnalyses' });
