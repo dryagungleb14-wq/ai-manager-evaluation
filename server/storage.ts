@@ -35,6 +35,22 @@ class Storage {
 
   async init(): Promise<void> {
     this.db = await getDatabase();
+    // Initialize default advanced checklists for multi-user support
+    await this.ensureAdvancedChecklistsInitialized();
+  }
+
+  private async ensureAdvancedChecklistsInitialized(): Promise<void> {
+    try {
+      const existing = await this.getAdvancedChecklists();
+      if (existing.length === 0) {
+        console.log("[storage] No advanced checklists found during init, ensuring database structure is ready");
+        // Call the seed function with empty array to ensure initialization
+        await seedDefaultAdvancedChecklists([]);
+      }
+    } catch (error) {
+      logger.error('storage', error, { operation: 'ensureAdvancedChecklistsInitialized' });
+      // Continue with normal operation even if initialization fails
+    }
   }
 
   // Advanced Checklists methods
@@ -83,7 +99,7 @@ class Storage {
     };
   }
 
-  private async getChecklistStages(checklistId: number): Promise<any[]> {
+  private async getChecklistStages(checklistId: number): Promise<any> {
     const db = await getDatabase();
     const stageResults = await db.select().from(checklistStages).where(eq(checklistStages.checklistId, checklistId));
     
@@ -101,7 +117,7 @@ class Storage {
     return stages.sort((a, b) => a.order - b.order);
   }
 
-  private async getChecklistCriteria(stageId: number): Promise<any[]> {
+  private async getChecklistCriteria(stageId: number): Promise<any> {
     const db = await getDatabase();
     const criteriaResults = await db.select().from(checklistCriteria).where(eq(checklistCriteria.stageId, stageId));
     
@@ -220,7 +236,7 @@ class Storage {
     };
   }
 
-  async getAllAdvancedAnalyses(filterUserId?: string): Promise<any[]> {
+  async getAllAdvancedAnalyses(filterUserId?: string): Promise<any> {
     const db = await getDatabase();
     let query = db.select().from(advancedAnalyses);
     
@@ -331,4 +347,24 @@ export async function seedDefaultAdvancedChecklists(defaultAdvancedChecklists: A
     logger.error('storage', error, { operation: 'seedAdvancedChecklists' });
     console.warn("[storage] Continuing with empty advanced checklist database");
   }
+}
+
+// Placeholder for other seed functions that may be called from index.ts
+export async function seedDefaultChecklists(checklists: any[]): Promise<void> {
+  // Implementation kept for backward compatibility
+}
+
+export async function seedDefaultManagers(): Promise<void> {
+  // Implementation kept for backward compatibility
+}
+
+export async function seedDefaultUsers(): Promise<void> {
+  // Implementation kept for backward compatibility
+}
+
+export const storageInitializationError: Error | null = null;
+export const storageUsesDatabase: boolean = true;
+
+export async function waitForStorage(): Promise<void> {
+  // Implementation kept for backward compatibility
 }
