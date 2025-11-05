@@ -16,6 +16,7 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
   const { drizzle } = await import("drizzle-orm/better-sqlite3");
 
   const sqlite = new Database("local.db");
+
   // Don't pass schema to drizzle for SQLite - it uses PostgreSQL-specific functions
   const client = drizzle(sqlite) as unknown as DatabaseClient;
 
@@ -28,7 +29,6 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
-
     CREATE TABLE IF NOT EXISTS managers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -39,7 +39,6 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
-
     CREATE TABLE IF NOT EXISTS checklists (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -48,7 +47,6 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
-
     CREATE TABLE IF NOT EXISTS analyses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
@@ -64,7 +62,6 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       FOREIGN KEY (checklist_id) REFERENCES checklists(id),
       FOREIGN KEY (manager_id) REFERENCES managers(id)
     );
-
     CREATE TABLE IF NOT EXISTS advanced_checklists (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -73,58 +70,12 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
-
-    CREATE TABLE IF NOT EXISTS checklist_stages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      checklist_id INTEGER NOT NULL,
-      name TEXT NOT NULL,
-      "order" INTEGER NOT NULL,
-      FOREIGN KEY (checklist_id) REFERENCES advanced_checklists(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS checklist_criteria (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      stage_id INTEGER NOT NULL,
-      number TEXT,
-      title TEXT NOT NULL,
-      description TEXT,
-      weight INTEGER NOT NULL,
-      is_binary INTEGER DEFAULT 0,
-      levels TEXT,
-      FOREIGN KEY (stage_id) REFERENCES checklist_stages(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS checklist_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      checklist_id INTEGER NOT NULL,
-      action TEXT NOT NULL,
-      changes TEXT,
-      user_id TEXT,
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (checklist_id) REFERENCES advanced_checklists(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS advanced_analyses (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      checklist_id INTEGER,
-      manager_id INTEGER,
-      source TEXT NOT NULL CHECK (source IN ('call', 'correspondence')),
-      language TEXT NOT NULL DEFAULT 'ru',
-      transcript TEXT NOT NULL,
-      report TEXT NOT NULL,
-      analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id),
-      FOREIGN KEY (checklist_id) REFERENCES advanced_checklists(id),
-      FOREIGN KEY (manager_id) REFERENCES managers(id)
-    );
-
     CREATE TABLE IF NOT EXISTS session (
       sid TEXT PRIMARY KEY,
       sess TEXT NOT NULL,
       expire DATETIME NOT NULL
     );
-    
+
     CREATE INDEX IF NOT EXISTS idx_session_expire ON session(expire);
   `);
 
@@ -132,30 +83,35 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
 }
 
 async function createRemoteDatabase(): Promise<DatabaseClient> {
-  const { Pool, neonConfig } = await import("@neondatabase/serverless");
-  const { drizzle } = await import("drizzle-orm/neon-serverless");
-  const ws = await import("ws");
-
-  neonConfig.webSocketConstructor = ws.default;
+  const { Pool } = await import("pg");
+  const { drizzle } = await import("drizzle-orm/node-postgres");
 
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
   }
 
   try {
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-    return drizzle({ client: pool, schema }) as unknown as DatabaseClient;
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL
+    });
+
+    return drizzle({
+      client: pool,
+      schema
+    }) as unknown as DatabaseClient;
   } catch (error) {
     logger.dbConnectionError(error, process.env.DATABASE_URL);
     throw error;
   }
 }
 
-const databasePromise: Promise<DatabaseClient> = (isLocalDev ? createLocalDatabase() : createRemoteDatabase())
+const databasePromise: Promise<DatabaseClient> = (
+  isLocalDev ? createLocalDatabase() : createRemoteDatabase()
+)
   .catch((error) => {
-    logger.error("db", error, { 
+    logger.error("db", error, {
       operation: "database initialization",
-      isLocalDev 
+      isLocalDev
     });
     throw error;
   });
