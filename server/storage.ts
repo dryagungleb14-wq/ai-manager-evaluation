@@ -3,6 +3,7 @@ import {
   Checklist,
   AnalysisReport,
   Manager,
+  InsertManager,
   checklists,
   analyses,
   managers,
@@ -18,8 +19,8 @@ import {
 import { eq, desc } from "drizzle-orm";
 import { getDatabase, type DatabaseClient } from "./db.js";
 import { logger } from "./utils/logger.js";
-import { forUlyanaChecklist } from './data/for-ulyana-checklist';
-import { preTrialChecklist } from './data/pre-trial-checklist';
+import { forUlyanaChecklist } from './data/for-ulyana-checklist.js';
+import { preTrialChecklist } from './data/pre-trial-checklist.js';
 
 export interface StoredAnalysis {
   id: string;
@@ -33,16 +34,21 @@ export interface StoredAnalysis {
 }
 
 class Storage {
-  private db: DatabaseClient;
+  private dbPromise: Promise<DatabaseClient>;
 
   constructor() {
-    this.db = getDatabase();
+    this.dbPromise = getDatabase();
   }
 
-  // Analysis methods
+  private async getDb(): Promise<DatabaseClient> {
+    return this.dbPromise;
+  }
+
+  // Analysis methods (simple checklists)
   async createAnalysis(analysis: any): Promise<void> {
     try {
-      await this.db.insert(analyses).values({
+      const db = await this.getDb();
+      await db.insert(analyses).values({
         id: analysis.id,
         source: analysis.source,
         language: analysis.language,
@@ -60,9 +66,10 @@ class Storage {
 
   async getAnalyses(managerId?: string): Promise<StoredAnalysis[]> {
     try {
-      let query = this.db.select().from(analyses);
+      const db = await this.getDb();
+      let query = db.select().from(analyses);
       if (managerId) {
-        query = query.where(eq(analyses.managerId, managerId));
+        query = query.where(eq(analyses.managerId, parseInt(managerId)));
       }
       const results = await query.orderBy(desc(analyses.analyzedAt));
       return results as StoredAnalysis[];
@@ -72,10 +79,107 @@ class Storage {
     }
   }
 
-  // Checklist methods
-  async createChecklist(checklist: Checklist): Promise<void> {
+  async saveAnalysis(
+    result: any,
+    checklistId: string,
+    transcript: string,
+    managerId?: string,
+    userId?: string
+  ): Promise<string> {
     try {
-      await this.db.insert(checklists).values(checklist);
+      const db = await this.getDb();
+      const analysis = {
+        source: result.source || 'call',
+        language: result.language || 'ru',
+        transcript,
+        checklistReport: JSON.stringify(result.checklistReport),
+        objectionsReport: JSON.stringify(result.objectionsReport),
+        analyzedAt: new Date().toISOString(),
+        managerId: managerId ? parseInt(managerId) : null,
+        userId: userId ? parseInt(userId) : null,
+        checklistId: parseInt(checklistId),
+      };
+
+      const [inserted] = await db.insert(analyses).values(analysis as any).returning();
+      return inserted.id.toString();
+    } catch (error) {
+      logger.error('storage', error, { operation: 'saveAnalysis' });
+      throw error;
+    }
+  }
+
+  async getAnalysis(id: string): Promise<any | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .select()
+        .from(analyses)
+        .where(eq(analyses.id, parseInt(id)));
+      
+      if (!result) {
+        return null;
+      }
+
+      return {
+        ...result,
+        checklistReport: JSON.parse(result.checklistReport as string),
+        objectionsReport: JSON.parse(result.objectionsReport as string),
+      };
+    } catch (error) {
+      logger.error('storage', error, { operation: 'getAnalysis', id });
+      throw error;
+    }
+  }
+
+  async getAllAnalyses(userId?: string): Promise<any[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(analyses);
+      
+      if (userId) {
+        query = query.where(eq(analyses.userId, parseInt(userId)));
+      }
+      
+      const results = await query.orderBy(desc(analyses.analyzedAt));
+      
+      return results.map((r: any) => ({
+        ...r,
+        checklistReport: JSON.parse(r.checklistReport),
+        objectionsReport: JSON.parse(r.objectionsReport),
+      }));
+    } catch (error) {
+      logger.error('storage', error, { operation: 'getAllAnalyses' });
+      throw error;
+    }
+  }
+
+  async deleteAnalysis(id: string): Promise<boolean> {
+    try {
+      const db = await this.getDb();
+      await db.delete(analyses).where(eq(analyses.id, parseInt(id)));
+      return true;
+    } catch (error) {
+      logger.error('storage', error, { operation: 'deleteAnalysis', id });
+      throw error;
+    }
+  }
+
+  // Checklist methods (simple checklists)
+  async createChecklist(checklist: Checklist): Promise<Checklist> {
+    try {
+      const db = await this.getDb();
+      const [inserted] = await db.insert(checklists).values({
+        name: checklist.name,
+        version: checklist.version,
+        items: JSON.stringify(checklist.items),
+      }).returning();
+      
+      return {
+        id: inserted.id.toString(),
+        name: inserted.name,
+        version: inserted.version,
+        items: JSON.parse(inserted.items as string),
+      };
     } catch (error) {
       logger.error('storage', error, { operation: 'createChecklist', checklist });
       throw error;
@@ -84,25 +188,78 @@ class Storage {
 
   async getChecklists(): Promise<Checklist[]> {
     try {
-      return await this.db.select().from(checklists);
+      const db = await this.getDb();
+      const results = await db.select().from(checklists);
+      return results.map((r: any) => ({
+        id: r.id.toString(),
+        name: r.name,
+        version: r.version,
+        items: JSON.parse(r.items),
+      }));
     } catch (error) {
       logger.error('storage', error, { operation: 'getChecklists' });
       throw error;
     }
   }
 
-  async updateChecklist(id: string, updates: Partial<Checklist>): Promise<void> {
+  async getChecklist(id: string): Promise<any | null> {
     try {
-      await this.db.update(checklists).set(updates).where(eq(checklists.id, id));
+      const db = await this.getDb();
+      const [result] = await db
+        .select()
+        .from(checklists)
+        .where(eq(checklists.id, parseInt(id)));
+      
+      if (!result) {
+        return null;
+      }
+
+      return {
+        ...result,
+        id: result.id.toString(),
+        items: JSON.parse(result.items as string),
+      };
+    } catch (error) {
+      logger.error('storage', error, { operation: 'getChecklist', id });
+      throw error;
+    }
+  }
+
+  async updateChecklist(id: string, updates: Partial<Checklist>): Promise<Checklist | null> {
+    try {
+      const db = await this.getDb();
+      const updateData: any = {};
+      if (updates.name) updateData.name = updates.name;
+      if (updates.version) updateData.version = updates.version;
+      if (updates.items) updateData.items = JSON.stringify(updates.items);
+
+      const [updated] = await db
+        .update(checklists)
+        .set(updateData)
+        .where(eq(checklists.id, parseInt(id)))
+        .returning();
+      
+      if (!updated) {
+        return null;
+      }
+
+      return {
+        id: updated.id.toString(),
+        name: updated.name,
+        version: updated.version,
+        items: JSON.parse(updated.items as string),
+      };
     } catch (error) {
       logger.error('storage', error, { operation: 'updateChecklist', id });
       throw error;
     }
   }
 
-  async deleteChecklist(id: string): Promise<void> {
+  async deleteChecklist(id: string): Promise<boolean> {
     try {
-      await this.db.delete(checklists).where(eq(checklists.id, id));
+      const db = await this.getDb();
+      await db.delete(checklists).where(eq(checklists.id, parseInt(id)));
+      return true;
     } catch (error) {
       logger.error('storage', error, { operation: 'deleteChecklist', id });
       throw error;
@@ -110,9 +267,55 @@ class Storage {
   }
 
   // Advanced Checklist methods
-  async createAdvancedChecklist(checklist: AdvancedChecklist): Promise<void> {
+  async createAdvancedChecklist(checklist: AdvancedChecklist): Promise<AdvancedChecklist> {
     try {
-      await this.db.insert(advancedChecklists).values(checklist);
+      const db = await this.getDb();
+      
+      // Insert the main checklist record
+      const [inserted] = await db.insert(advancedChecklists).values({
+        name: checklist.name,
+        version: checklist.version,
+        totalScore: checklist.totalScore,
+      }).returning();
+
+      const checklistId = inserted.id;
+
+      // Insert stages and criteria
+      for (const stage of checklist.stages) {
+        const [insertedStage] = await db.insert(checklistStages).values({
+          checklistId,
+          name: stage.name,
+          order: stage.order,
+        }).returning();
+
+        const stageId = insertedStage.id;
+
+        // Insert criteria for this stage
+        for (const criterion of stage.criteria) {
+          const hasLevels = criterion.max !== undefined || criterion.mid !== undefined || criterion.min !== undefined;
+          
+          await db.insert(checklistCriteria).values({
+            stageId,
+            number: criterion.number,
+            title: criterion.title,
+            description: criterion.description,
+            weight: criterion.weight,
+            isBinary: criterion.isBinary || false,
+            levels: hasLevels ? {
+              max: criterion.max,
+              mid: criterion.mid,
+              min: criterion.min,
+            } : null,
+          });
+        }
+      }
+
+      // Return the full checklist with generated ID
+      const fullChecklist = await this.getAdvancedChecklistWithStages(checklistId.toString());
+      if (!fullChecklist) {
+        throw new Error(`Failed to retrieve created checklist with ID ${checklistId}`);
+      }
+      return fullChecklist;
     } catch (error) {
       logger.error('storage', error, { operation: 'createAdvancedChecklist', checklist });
       throw error;
@@ -121,32 +324,104 @@ class Storage {
 
   async getAdvancedChecklists(): Promise<AdvancedChecklist[]> {
     try {
-      return await this.db.select().from(advancedChecklists);
+      const db = await this.getDb();
+      const checklists = await db.select().from(advancedChecklists);
+      
+      // For each checklist, fetch its stages and criteria
+      const results = await Promise.all(
+        checklists.map(async (checklist: any) => {
+          return this.getAdvancedChecklistWithStages(checklist.id.toString());
+        })
+      );
+      
+      // Filter out any null values (shouldn't happen, but TypeScript safety)
+      return results.filter((c): c is AdvancedChecklist => c !== null);
     } catch (error) {
       logger.error('storage', error, { operation: 'getAdvancedChecklists' });
       throw error;
     }
   }
 
-  async getAdvancedChecklistById(id: string): Promise<AdvancedChecklist | null> {
+  async getAdvancedChecklistWithStages(id: string): Promise<AdvancedChecklist | null> {
     try {
-      const result = await this.db
+      const db = await this.getDb();
+      const checklistId = parseInt(id);
+      if (isNaN(checklistId)) {
+        return null;
+      }
+
+      const [checklist] = await db
         .select()
         .from(advancedChecklists)
-        .where(eq(advancedChecklists.id, id));
-      return result.length > 0 ? result[0] : null;
+        .where(eq(advancedChecklists.id, checklistId));
+      
+      if (!checklist) {
+        return null;
+      }
+
+      // Fetch stages
+      const stages = await db
+        .select()
+        .from(checklistStages)
+        .where(eq(checklistStages.checklistId, checklistId))
+        .orderBy(checklistStages.order);
+
+      // Fetch criteria for all stages
+      const stagesWithCriteria = await Promise.all(
+        stages.map(async (stage: any) => {
+          const criteria = await db
+            .select()
+            .from(checklistCriteria)
+            .where(eq(checklistCriteria.stageId, stage.id));
+
+          return {
+            id: stage.id.toString(),
+            name: stage.name,
+            order: stage.order,
+            criteria: criteria.map((c: any) => ({
+              id: c.id.toString(),
+              number: c.number,
+              title: c.title,
+              description: c.description,
+              weight: c.weight,
+              isBinary: c.isBinary,
+              ...(c.levels ? {
+                max: c.levels.max,
+                mid: c.levels.mid,
+                min: c.levels.min,
+              } : {}),
+            })),
+          };
+        })
+      );
+
+      return {
+        id: checklist.id.toString(),
+        name: checklist.name,
+        version: checklist.version,
+        type: 'advanced' as const,
+        totalScore: checklist.totalScore,
+        stages: stagesWithCriteria,
+        createdAt: checklist.createdAt,
+        updatedAt: checklist.updatedAt,
+      };
     } catch (error) {
-      logger.error('storage', error, { operation: 'getAdvancedChecklistById', id });
+      logger.error('storage', error, { operation: 'getAdvancedChecklistWithStages', id });
       throw error;
     }
   }
 
   async updateAdvancedChecklist(id: string, updates: Partial<AdvancedChecklist>): Promise<void> {
     try {
-      await this.db
+      const db = await this.getDb();
+      await db
         .update(advancedChecklists)
-        .set(updates)
-        .where(eq(advancedChecklists.id, id));
+        .set({
+          name: updates.name,
+          version: updates.version,
+          totalScore: updates.totalScore,
+        })
+        .where(eq(advancedChecklists.id, parseInt(id)));
     } catch (error) {
       logger.error('storage', error, { operation: 'updateAdvancedChecklist', id });
       throw error;
@@ -155,7 +430,8 @@ class Storage {
 
   async deleteAdvancedChecklist(id: string): Promise<void> {
     try {
-      await this.db.delete(advancedChecklists).where(eq(advancedChecklists.id, id));
+      const db = await this.getDb();
+      await db.delete(advancedChecklists).where(eq(advancedChecklists.id, parseInt(id)));
     } catch (error) {
       logger.error('storage', error, { operation: 'deleteAdvancedChecklist', id });
       throw error;
@@ -167,12 +443,11 @@ class Storage {
     report: AdvancedChecklistReport
   ): Promise<void> {
     try {
-      await this.db
+      const db = await this.getDb();
+      await db
         .insert(advancedAnalyses)
         .values({
-          ...report,
-          results: JSON.stringify(report.results),
-          metadata: JSON.stringify(report.metadata),
+          report: JSON.stringify(report),
         } as any);
     } catch (error) {
       logger.error('storage', error, { operation: 'createAdvancedChecklistReport' });
@@ -184,21 +459,100 @@ class Storage {
     checklistId: string
   ): Promise<AdvancedChecklistReport[]> {
     try {
-      return await this.db
+      const db = await this.getDb();
+      const results = await db
         .select()
         .from(advancedAnalyses)
-        .where(eq(advancedAnalyses.checklistId, checklistId))
-        .orderBy(desc(advancedAnalyses.createdAt));
+        .where(eq(advancedAnalyses.checklistId, parseInt(checklistId)))
+        .orderBy(desc(advancedAnalyses.analyzedAt));
+      
+      return results.map((r: any) => JSON.parse(r.report));
     } catch (error) {
       logger.error('storage', error, { operation: 'getAdvancedChecklistReports' });
       throw error;
     }
   }
 
-  // Manager methods
-  async createManager(manager: Manager): Promise<void> {
+  // Advanced analysis methods
+  async saveAdvancedAnalysis(
+    result: any,
+    checklistId: string,
+    transcript: string,
+    managerId?: string,
+    source: string = 'call',
+    language: string = 'ru',
+    userId?: string
+  ): Promise<string> {
     try {
-      await this.db.insert(managers).values(manager);
+      const db = await this.getDb();
+      const analysis = {
+        source,
+        language,
+        transcript,
+        report: JSON.stringify(result),
+        analyzedAt: new Date().toISOString(),
+        managerId: managerId ? parseInt(managerId) : null,
+        userId: userId ? parseInt(userId) : null,
+        checklistId: parseInt(checklistId),
+      };
+
+      const [inserted] = await db.insert(advancedAnalyses).values(analysis as any).returning();
+      return inserted.id.toString();
+    } catch (error) {
+      logger.error('storage', error, { operation: 'saveAdvancedAnalysis' });
+      throw error;
+    }
+  }
+
+  async getAdvancedAnalysis(id: string): Promise<any | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .select()
+        .from(advancedAnalyses)
+        .where(eq(advancedAnalyses.id, parseInt(id)));
+      
+      if (!result) {
+        return null;
+      }
+
+      return {
+        ...result,
+        report: JSON.parse(result.report as string),
+      };
+    } catch (error) {
+      logger.error('storage', error, { operation: 'getAdvancedAnalysis', id });
+      throw error;
+    }
+  }
+
+  async getAllAdvancedAnalyses(userId?: string): Promise<any[]> {
+    try {
+      const db = await this.getDb();
+      let query = db.select().from(advancedAnalyses);
+      
+      if (userId) {
+        query = query.where(eq(advancedAnalyses.userId, parseInt(userId)));
+      }
+      
+      const results = await query.orderBy(desc(advancedAnalyses.analyzedAt));
+      
+      return results.map((r: any) => ({
+        ...r,
+        report: JSON.parse(r.report),
+      }));
+    } catch (error) {
+      logger.error('storage', error, { operation: 'getAllAdvancedAnalyses' });
+      throw error;
+    }
+  }
+
+  // Manager methods
+  async createManager(manager: InsertManager): Promise<Manager> {
+    try {
+      const db = await this.getDb();
+      const [inserted] = await db.insert(managers).values(manager as any).returning();
+      return inserted;
     } catch (error) {
       logger.error('storage', error, { operation: 'createManager', manager });
       throw error;
@@ -207,7 +561,8 @@ class Storage {
 
   async getManagers(): Promise<Manager[]> {
     try {
-      return await this.db.select().from(managers);
+      const db = await this.getDb();
+      return await db.select().from(managers);
     } catch (error) {
       logger.error('storage', error, { operation: 'getManagers' });
       throw error;
@@ -216,29 +571,42 @@ class Storage {
 
   async getManagerById(id: string): Promise<Manager | null> {
     try {
-      const result = await this.db
+      const db = await this.getDb();
+      const [result] = await db
         .select()
         .from(managers)
-        .where(eq(managers.id, id));
-      return result.length > 0 ? result[0] : null;
+        .where(eq(managers.id, parseInt(id)));
+      return result || null;
     } catch (error) {
       logger.error('storage', error, { operation: 'getManagerById', id });
       throw error;
     }
   }
 
-  async updateManager(id: string, updates: Partial<Manager>): Promise<void> {
+  async getManager(id: string): Promise<Manager | null> {
+    return this.getManagerById(id);
+  }
+
+  async updateManager(id: string, updates: Partial<Manager>): Promise<Manager | null> {
     try {
-      await this.db.update(managers).set(updates).where(eq(managers.id, id));
+      const db = await this.getDb();
+      const [updated] = await db
+        .update(managers)
+        .set(updates)
+        .where(eq(managers.id, parseInt(id)))
+        .returning();
+      return updated || null;
     } catch (error) {
       logger.error('storage', error, { operation: 'updateManager', id });
       throw error;
     }
   }
 
-  async deleteManager(id: string): Promise<void> {
+  async deleteManager(id: string): Promise<boolean> {
     try {
-      await this.db.delete(managers).where(eq(managers.id, id));
+      const db = await this.getDb();
+      await db.delete(managers).where(eq(managers.id, parseInt(id)));
+      return true;
     } catch (error) {
       logger.error('storage', error, { operation: 'deleteManager', id });
       throw error;
@@ -248,20 +616,59 @@ class Storage {
 
 export const storage = new Storage();
 
+// Export variables for storage status
+export const storageInitializationError: Error | null = null;
+export const storageUsesDatabase = true;
+
+// Helper function to wait for storage to be ready
+export async function waitForStorage(): Promise<void> {
+  // Since storage is already initialized, just return
+  return Promise.resolve();
+}
+
+// Seed function to initialize default simple checklists
+export async function seedDefaultChecklists(checklistsToSeed: Checklist[]): Promise<void> {
+  try {
+    console.log('[storage] Starting to seed default simple checklists...');
+    const existing = await storage.getChecklists();
+    const checklistNames = new Set(existing.map((c) => c.name));
+    
+    const checklistsToAdd = checklistsToSeed.filter((c) => !checklistNames.has(c.name));
+    
+    if (checklistsToAdd.length > 0) {
+      console.log(`[storage] Seeding database with ${checklistsToAdd.length} simple checklists...`);
+      for (const checklist of checklistsToAdd) {
+        console.log(`[storage] Creating checklist: ${checklist.name}`);
+        await storage.createChecklist(checklist);
+      }
+      console.log(`[storage] Successfully seeded ${checklistsToAdd.length} simple checklists`);
+    } else {
+      console.log("[storage] All default simple checklists already exist in database");
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[storage] CRITICAL ERROR seeding simple checklists: ${errorMessage}`);
+    logger.error('storage', error, { operation: 'seedDefaultChecklists' });
+    throw new Error(`Failed to seed simple checklists: ${errorMessage}`);
+  }
+}
+
 // Seed function to initialize default advanced checklists
 export async function seedDefaultAdvancedChecklists(): Promise<void> {
   try {
     console.log('[storage] Starting to seed default advanced checklists...');
     const existing = await storage.getAdvancedChecklists();
-    const checklistIds = new Set(existing.map((c) => c.id));
+    const checklistNames = new Set(existing.map((c) => c.name));
     
-    // Сидируем оба чек-листа глобально (без userId/ownerId)
-    const checklistsToAdd = [preTrialChecklist, forUlyanaChecklist].filter((c) => !checklistIds.has(c.id));
+    // Seed both checklists globally (without userId/ownerId)
+    const checklistsToAdd = [preTrialChecklist, forUlyanaChecklist].filter(
+      (c) => !checklistNames.has(c.name)
+    );
     
     if (checklistsToAdd.length > 0) {
       console.log(`[storage] Seeding database with ${checklistsToAdd.length} advanced checklists...`);
       for (const checklist of checklistsToAdd) {
-        console.log(`[storage] Creating advanced checklist: ${checklist.id}`);
+        console.log(`[storage] Creating advanced checklist: ${checklist.name}`);
         await storage.createAdvancedChecklist(checklist);
       }
       console.log(`[storage] Successfully seeded ${checklistsToAdd.length} advanced checklists`);
@@ -274,5 +681,35 @@ export async function seedDefaultAdvancedChecklists(): Promise<void> {
     logger.error('storage', error, { operation: 'seedAdvancedChecklists' });
     // Re-throw the error so deployment fails and alerts the user
     throw new Error(`Failed to seed advanced checklists: ${errorMessage}`);
+  }
+}
+
+// Seed function to initialize default managers
+export async function seedDefaultManagers(): Promise<void> {
+  try {
+    console.log('[storage] Checking for default managers...');
+    const existing = await storage.getManagers();
+    
+    if (existing.length === 0) {
+      console.log('[storage] No managers found, seeding is not required for managers');
+    } else {
+      console.log(`[storage] Found ${existing.length} existing managers`);
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[storage] Error checking managers: ${errorMessage}`);
+    logger.error('storage', error, { operation: 'seedDefaultManagers' });
+  }
+}
+
+// Seed function to initialize default users
+export async function seedDefaultUsers(): Promise<void> {
+  try {
+    console.log('[storage] Default users seeding is handled by auth service');
+    // User seeding is typically handled by the auth service during initialization
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[storage] Error in seedDefaultUsers: ${errorMessage}`);
+    logger.error('storage', error, { operation: 'seedDefaultUsers' });
   }
 }
