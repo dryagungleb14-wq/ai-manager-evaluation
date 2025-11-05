@@ -292,6 +292,8 @@ class Storage {
 
         // Insert criteria for this stage
         for (const criterion of stage.criteria) {
+          const hasLevels = criterion.max !== undefined || criterion.mid !== undefined || criterion.min !== undefined;
+          
           await db.insert(checklistCriteria).values({
             stageId,
             number: criterion.number,
@@ -299,7 +301,7 @@ class Storage {
             description: criterion.description,
             weight: criterion.weight,
             isBinary: criterion.isBinary || false,
-            levels: criterion.max || criterion.mid || criterion.min ? {
+            levels: hasLevels ? {
               max: criterion.max,
               mid: criterion.mid,
               min: criterion.min,
