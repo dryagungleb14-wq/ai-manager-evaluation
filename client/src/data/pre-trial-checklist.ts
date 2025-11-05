@@ -1,8 +1,8 @@
 import { AdvancedChecklist } from "@/lib/rest";
 
 /**
- * Чек-лист "До пробного этапа"
- * Детализированный чек-лист для оценки качества работы менеджера на этапе до пробного периода
+ * Чек-лист "До пробного занятия"
+ * Детализированный чек-лист для оценки качества работы менеджера на этапе до пробного занятия
  * с использованием системы оценки MAX/MID/MIN
  * 
  * NOTE: This file is intentionally duplicated from server/data/pre-trial-checklist.ts
@@ -10,7 +10,7 @@ import { AdvancedChecklist } from "@/lib/rest";
  */
 export const preTrialChecklist: AdvancedChecklist = {
   id: "pre-trial-checklist",
-  name: "Чек-лист до пробного этапа",
+  name: "До пробного занятия",
   version: "1.0",
   type: "advanced",
   totalScore: 100,
