@@ -35,6 +35,7 @@ export interface StoredAnalysis {
 
 class Storage {
   private dbPromise: Promise<DatabaseClient>;
+  private static readonly MAX_LOG_VALUE_LENGTH = 100;
 
   constructor() {
     this.dbPromise = getDatabase();
@@ -51,7 +52,7 @@ class Storage {
       } catch (error) {
         logger.error('storage', error, { 
           operation: 'safeParse', 
-          value: value.substring(0, 100) 
+          value: value.substring(0, Storage.MAX_LOG_VALUE_LENGTH) 
         });
         throw new Error(`Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`);
       }
