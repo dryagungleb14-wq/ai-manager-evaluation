@@ -18,8 +18,8 @@ import {
 import { eq, desc } from "drizzle-orm";
 import { getDatabase, type DatabaseClient } from "./db.js";
 import { logger } from "./utils/logger.js";
-import forUlyanaChecklist from './data/for-ulyana-checklist';
-import preTrialChecklist from './data/pre-trial-checklist';
+import { forUlyanaChecklist } from './data/for-ulyana-checklist';
+import { preTrialChecklist } from './data/pre-trial-checklist';
 
 export interface StoredAnalysis {
   id: string;
