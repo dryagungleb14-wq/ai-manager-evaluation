@@ -727,7 +727,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       const avgScores = analyses.reduce<number[]>((acc, analysis) => {
         const { checklistReport } = analysis;
         if (checklistReport?.items?.length) {
-          const totalScore = checklistReport.items.reduce((sum, item) => sum + item.score, 0);
+          const totalScore = checklistReport.items.reduce((sum: number, item: any) => sum + item.score, 0);
           const avgScore = totalScore / checklistReport.items.length;
           acc.push(avgScore);
         }
