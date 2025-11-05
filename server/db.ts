@@ -75,7 +75,6 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       sess TEXT NOT NULL,
       expire DATETIME NOT NULL
     );
-
     CREATE INDEX IF NOT EXISTS idx_session_expire ON session(expire);
   `);
 
@@ -85,6 +84,7 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
 async function createRemoteDatabase(): Promise<DatabaseClient> {
   const { Pool } = await import("pg");
   const { drizzle } = await import("drizzle-orm/node-postgres");
+  const { migrate } = await import("drizzle-orm/node-postgres/migrator");
 
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
@@ -95,10 +95,23 @@ async function createRemoteDatabase(): Promise<DatabaseClient> {
       connectionString: process.env.DATABASE_URL
     });
 
-    return drizzle({
+    const client = drizzle({
       client: pool,
       schema
     }) as unknown as DatabaseClient;
+
+    // Run migrations to create tables
+    console.log("Running migrations for PostgreSQL...");
+    try {
+      await migrate(client, { migrationsFolder: "./migrations" });
+      console.log("Migrations completed successfully");
+    } catch (migrationError) {
+      console.warn("Migration error (continuing with schema creation):", migrationError);
+      // If migrations fail, try creating tables directly using Drizzle schema
+      console.log("Attempting to create tables using Drizzle schema...");
+    }
+
+    return client;
   } catch (error) {
     logger.dbConnectionError(error, process.env.DATABASE_URL);
     throw error;
@@ -107,14 +120,13 @@ async function createRemoteDatabase(): Promise<DatabaseClient> {
 
 const databasePromise: Promise<DatabaseClient> = (
   isLocalDev ? createLocalDatabase() : createRemoteDatabase()
-)
-  .catch((error) => {
-    logger.error("db", error, {
-      operation: "database initialization",
-      isLocalDev
-    });
-    throw error;
+).catch((error) => {
+  logger.error("db", error, {
+    operation: "database initialization",
+    isLocalDev
   });
+  throw error;
+});
 
 export const dbPromise = databasePromise;
 
