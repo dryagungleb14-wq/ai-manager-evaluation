@@ -19,7 +19,7 @@ import { eq, desc } from "drizzle-orm";
 import { getDatabase, type DatabaseClient } from "./db.js";
 import { logger } from "./utils/logger.js";
 import forUlyanaChecklist from './data/for-ulyana-checklist';
-import beforeTrialChecklist from './data/before-trial-checklist';
+import preTrialChecklist from './data/pre-trial-checklist';
 
 export interface StoredAnalysis {
   id: string;
@@ -46,7 +46,7 @@ export async function seedDefaultAdvancedChecklists(): Promise<void> {
     const checklistIds = new Set(existing.map((c) => c.id));
     
     // Сидируем оба чек-листа глобально (без userId/ownerId)
-    const checklistsToAdd = [beforeTrialChecklist, forUlyanaChecklist].filter((c) => !checklistIds.has(c.id));
+    const checklistsToAdd = [preTrialChecklist, forUlyanaChecklist].filter((c) => !checklistIds.has(c.id));
     
     if (checklistsToAdd.length > 0) {
       console.log(`[storage] Seeding database with ${checklistsToAdd.length} advanced checklists...`);
