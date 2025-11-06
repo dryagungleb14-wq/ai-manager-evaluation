@@ -45,11 +45,23 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS transcripts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      source TEXT NOT NULL CHECK (source IN ('call', 'correspondence')),
+      language TEXT NOT NULL DEFAULT 'ru',
+      text TEXT NOT NULL,
+      audio_file_name TEXT,
+      duration INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
     CREATE TABLE IF NOT EXISTS analyses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
       checklist_id INTEGER,
       manager_id INTEGER,
+      transcript_id INTEGER,
       source TEXT NOT NULL CHECK (source IN ('call', 'correspondence')),
       language TEXT NOT NULL DEFAULT 'ru',
       transcript TEXT NOT NULL,
@@ -58,7 +70,8 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (checklist_id) REFERENCES checklists(id),
-      FOREIGN KEY (manager_id) REFERENCES managers(id)
+      FOREIGN KEY (manager_id) REFERENCES managers(id),
+      FOREIGN KEY (transcript_id) REFERENCES transcripts(id)
     );
     CREATE TABLE IF NOT EXISTS advanced_checklists (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,6 +113,7 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       user_id INTEGER,
       checklist_id INTEGER,
       manager_id INTEGER,
+      transcript_id INTEGER,
       source TEXT NOT NULL CHECK (source IN ('call', 'correspondence')),
       language TEXT NOT NULL DEFAULT 'ru',
       transcript TEXT NOT NULL,
@@ -107,7 +121,8 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (checklist_id) REFERENCES advanced_checklists(id),
-      FOREIGN KEY (manager_id) REFERENCES managers(id)
+      FOREIGN KEY (manager_id) REFERENCES managers(id),
+      FOREIGN KEY (transcript_id) REFERENCES transcripts(id)
     );
     CREATE TABLE IF NOT EXISTS session (
       sid TEXT PRIMARY KEY,
@@ -163,11 +178,23 @@ async function createRemoteDatabase(): Promise<DatabaseClient> {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS transcripts (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER,
+          source VARCHAR(50) NOT NULL CHECK (source IN ('call', 'correspondence')),
+          language VARCHAR(10) NOT NULL DEFAULT 'ru',
+          text TEXT NOT NULL,
+          audio_file_name VARCHAR(255),
+          duration INTEGER,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id)
+        );
         CREATE TABLE IF NOT EXISTS analyses (
           id SERIAL PRIMARY KEY,
           user_id INTEGER,
           checklist_id INTEGER,
           manager_id INTEGER,
+          transcript_id INTEGER,
           source VARCHAR(50) NOT NULL CHECK (source IN ('call', 'correspondence')),
           language VARCHAR(10) NOT NULL DEFAULT 'ru',
           transcript TEXT NOT NULL,
@@ -176,7 +203,8 @@ async function createRemoteDatabase(): Promise<DatabaseClient> {
           analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (user_id) REFERENCES users(id),
           FOREIGN KEY (checklist_id) REFERENCES checklists(id),
-          FOREIGN KEY (manager_id) REFERENCES managers(id)
+          FOREIGN KEY (manager_id) REFERENCES managers(id),
+          FOREIGN KEY (transcript_id) REFERENCES transcripts(id)
         );
         CREATE TABLE IF NOT EXISTS advanced_checklists (
           id SERIAL PRIMARY KEY,
@@ -218,6 +246,7 @@ async function createRemoteDatabase(): Promise<DatabaseClient> {
           user_id INTEGER,
           checklist_id INTEGER,
           manager_id INTEGER,
+          transcript_id INTEGER,
           source VARCHAR(50) NOT NULL CHECK (source IN ('call', 'correspondence')),
           language VARCHAR(10) NOT NULL DEFAULT 'ru',
           transcript TEXT NOT NULL,
@@ -225,7 +254,8 @@ async function createRemoteDatabase(): Promise<DatabaseClient> {
           analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (user_id) REFERENCES users(id),
           FOREIGN KEY (checklist_id) REFERENCES advanced_checklists(id),
-          FOREIGN KEY (manager_id) REFERENCES managers(id)
+          FOREIGN KEY (manager_id) REFERENCES managers(id),
+          FOREIGN KEY (transcript_id) REFERENCES transcripts(id)
         );
         CREATE TABLE IF NOT EXISTS session (
           sid VARCHAR(255) PRIMARY KEY,

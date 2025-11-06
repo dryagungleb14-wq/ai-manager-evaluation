@@ -47,6 +47,22 @@ const AdvancedChecklistResults = lazy(() =>
   }))
 );
 
+const TranscriptHistory = lazy(() =>
+  import("@/components/transcript-history").then((module) => ({
+    default: module.TranscriptHistory,
+  }))
+);
+
+interface SavedTranscript {
+  id: number;
+  text: string;
+  source: "call" | "correspondence";
+  language: string;
+  audioFileName: string | null;
+  duration: number | null;
+  createdAt: string;
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"call" | "correspondence">("call");
   const [transcript, setTranscript] = useState("");
@@ -55,6 +71,8 @@ export default function Home() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeChecklist, setActiveChecklist] = useState<AnyChecklist | null>(null);
   const [analysisReport, setAnalysisReport] = useState<AnalysisReport | AdvancedChecklistReport | null>(null);
+  const [currentTranscriptId, setCurrentTranscriptId] = useState<string | null>(null);
+  const [isFromHistory, setIsFromHistory] = useState(false);
   const { toast } = useToast();
 
   // Сброс отчёта при загрузке нового контента
@@ -66,6 +84,43 @@ export default function Home() {
   const handleChecklistChange = useCallback((checklist: AnyChecklist) => {
     setActiveChecklist(checklist);
   }, []);
+
+  // Handle selecting a transcript from history
+  const handleTranscriptSelect = useCallback((savedTranscript: SavedTranscript) => {
+    // Set the transcript text
+    if (savedTranscript.source === "call") {
+      setTranscript(savedTranscript.text);
+      setActiveTab("call");
+    } else {
+      setCorrespondenceText(savedTranscript.text);
+      setActiveTab("correspondence");
+    }
+    
+    // Store the transcript ID for re-evaluation
+    setCurrentTranscriptId(savedTranscript.id.toString());
+    setIsFromHistory(true);
+    
+    // Reset analysis when loading a saved transcript
+    setAnalysisReport(null);
+    
+    toast({
+      title: "Транскрипт загружен",
+      description: "Теперь вы можете провести анализ по чек-листу",
+    });
+  }, [toast]);
+
+  // Handle new transcript from audio upload
+  const handleNewTranscriptId = useCallback((transcriptId: string) => {
+    setCurrentTranscriptId(transcriptId);
+    setIsFromHistory(false);
+  }, []);
+
+  // Reset transcript selection when starting new upload
+  const handleUploadStart = useCallback(() => {
+    handleResetAnalysis();
+    setCurrentTranscriptId(null);
+    setIsFromHistory(false);
+  }, [handleResetAnalysis]);
 
   const handleAnalyze = async () => {
     if (!activeChecklist) {
@@ -100,6 +155,7 @@ export default function Home() {
           checklistId: activeChecklist.id,
           language: "ru",
           source: activeTab,
+          transcriptId: currentTranscriptId,
         };
 
         const response = await fetch(buildApiUrl("/api/advanced-checklists/analyze"), {
@@ -121,6 +177,7 @@ export default function Home() {
           checklist: activeChecklist,
           language: "ru",
           source: activeTab,
+          transcriptId: currentTranscriptId,
         };
 
         const response = await fetch(buildApiUrl("/api/analyze"), {
@@ -212,9 +269,10 @@ export default function Home() {
                 >
                   <AudioUpload
                     onTranscript={setTranscript}
+                    onTranscriptId={handleNewTranscriptId}
                     isProcessing={isProcessingAudio}
                     setIsProcessing={setIsProcessingAudio}
-                    onUploadStart={handleResetAnalysis}
+                    onUploadStart={handleUploadStart}
                   />
                 </Suspense>
 
@@ -246,6 +304,12 @@ export default function Home() {
 
             {hasTextToAnalyze && !analysisReport && (
               <Card className="p-6">
+                {isFromHistory && (
+                  <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+                    <History className="h-4 w-4" />
+                    <span>Используется сохранённый транскрипт</span>
+                  </div>
+                )}
                 <Button
                   size="lg"
                   onClick={handleAnalyze}
@@ -295,6 +359,16 @@ export default function Home() {
               }
             >
               <ChecklistSelector onChecklistChange={handleChecklistChange} />
+            </Suspense>
+            
+            <Suspense
+              fallback={
+                <Card className="p-6 text-center text-muted-foreground">
+                  Загрузка истории транскриптов...
+                </Card>
+              }
+            >
+              <TranscriptHistory onTranscriptSelect={handleTranscriptSelect} />
             </Suspense>
           </aside>
         </div>
