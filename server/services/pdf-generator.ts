@@ -1,5 +1,5 @@
-import PDFDocument from "pdfkit";
-import { AnalysisReport, ChecklistReportItem } from "../shared/schema.js";
+56
+  import { AnalysisReport, ChecklistReportItem } from "../shared/schema.js";
 
 interface PDFOptions {
   title?: string;
@@ -53,7 +53,7 @@ export function generatePDFReport(
   const sourceText = meta.source === "call" ? "Звонок" : "Переписка";
   addTitle(`Отчёт анализа: ${sourceText}`, 24);
 
-  addText(`Дата анализа: ${new Date(meta.analyzed_at).toLocaleString("ru")}`, {
+  addText(`Дата анализа: $new Date(meta.analyzed_at || new Date()).toLocaleString("ru")}`, {
     continued: false,
   });
   addText(`Язык: ${meta.language}`, { continued: false });
