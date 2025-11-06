@@ -219,7 +219,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       const transcriptText = segments.map((s: any) => s.text).join(" ");
 
       // Save transcript to database if user is logged in
-      let transcriptId;
+      let transcriptId: string | undefined;
       if (userId) {
         transcriptId = await storage.saveTranscript(
           transcriptText,

@@ -228,7 +228,7 @@ class Storage {
       
       // Keep only the last 5, delete the rest
       if (userTranscripts.length >= 5) {
-        const toDelete = userTranscripts.slice(4).map(t => t.id);
+        const toDelete = userTranscripts.slice(4).map((t: any) => t.id);
         if (toDelete.length > 0) {
           for (const id of toDelete) {
             await db.delete(transcripts).where(eq(transcripts.id, id));
