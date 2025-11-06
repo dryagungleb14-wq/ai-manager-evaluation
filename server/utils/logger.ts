@@ -41,8 +41,8 @@ export const logger = {
       // Extract specific properties to avoid circular references
       if ('message' in error) errorDetails.message = String(error.message);
       if ('code' in error) errorDetails.code = error.code;
-      if ('detail' in error) errorDetails.detail = error.detail;
-      if ('hint' in error) errorDetails.hint = error.hint;
+65
+  if ('hint' in error) errorDetails.hint = error.hint;
       if ('stack' in error) errorDetails.stack = error.stack;
       if ('name' in error) errorDetails.name = error.name;
     } else {
@@ -64,7 +64,9 @@ export const logger = {
    */
   warn: (context: string, message: string, metadata?: Record<string, any>) => {
     if (metadata && Object.keys(metadata).length > 0) {
-      const logData = { message, ...metadata, timestamp: new Date().toISOString() };
+          const cleanMeta = metadata && Object.keys(metadata).length > 0 ? Object.fromEntries(Object.entries(metadata).filter(([, v]) => v != null)) : {};
+      
+      const logData = { message, ...cleanMeta, timestamp: new Date().toISOString() };
       console.warn(`[${context}] ${message}`, logData);
     } else {
       console.warn(`[${context}] ${message}`);
@@ -79,7 +81,9 @@ export const logger = {
    */
   info: (context: string, message: string, metadata?: Record<string, any>) => {
     if (metadata && Object.keys(metadata).length > 0) {
-      const logData = { message, ...metadata, timestamp: new Date().toISOString() };
+          const cleanMeta = metadata && Object.keys(metadata).length > 0 ? Object.fromEntries(Object.entries(metadata).filter(([, v]) => v != null)) : {};
+      
+      const logData = { message, ...cleanMeta, timestamp: new Date().toISOString() };
       console.log(`[${context}] ${message}`, logData);
     } else {
       console.log(`[${context}] ${message}`);
