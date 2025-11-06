@@ -8,12 +8,13 @@ import { buildApiUrl } from "@/lib/apiBase";
 
 interface AudioUploadProps {
   onTranscript: (transcript: string) => void;
+  onTranscriptId?: (transcriptId: string) => void;
   isProcessing: boolean;
   setIsProcessing: (value: boolean) => void;
   onUploadStart?: () => void;
 }
 
-export function AudioUpload({ onTranscript, isProcessing, setIsProcessing, onUploadStart }: AudioUploadProps) {
+export function AudioUpload({ onTranscript, onTranscriptId, isProcessing, setIsProcessing, onUploadStart }: AudioUploadProps) {
   const [progress, setProgress] = useState(0);
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +61,12 @@ export function AudioUpload({ onTranscript, isProcessing, setIsProcessing, onUpl
       }
 
       onTranscript(transcriptText);
+      
+      // Pass transcriptId if available
+      if (data.transcriptId && onTranscriptId) {
+        onTranscriptId(data.transcriptId);
+      }
+      
       setProgress(100);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Произошла ошибка");
@@ -67,7 +74,7 @@ export function AudioUpload({ onTranscript, isProcessing, setIsProcessing, onUpl
     } finally {
       setIsProcessing(false);
     }
-  }, [onTranscript, setIsProcessing, onUploadStart]);
+  }, [onTranscript, onTranscriptId, setIsProcessing, onUploadStart]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
