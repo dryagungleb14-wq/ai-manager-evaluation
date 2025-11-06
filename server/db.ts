@@ -136,7 +136,7 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
   try {
     // Check if transcript_id column exists in advanced_analyses
     const tableInfo = sqlite.pragma("table_info(advanced_analyses)") as Array<{ name: string }>;
-    const hasTranscriptId = tableInfo.some((col: { name: string }) => col.name === 'transcript_id');
+    const hasTranscriptId = tableInfo.some(col => col.name === 'transcript_id');
     
     if (!hasTranscriptId) {
       sqlite.exec(`
@@ -145,7 +145,7 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       console.log("Added transcript_id column to advanced_analyses table");
     }
   } catch (migrationError) {
-    console.log("Migration info:", migrationError instanceof Error ? migrationError.message : migrationError);
+    console.log("Migration warning:", migrationError instanceof Error ? migrationError.message : migrationError);
   }
 
   return client;
@@ -307,7 +307,7 @@ async function createRemoteDatabase(): Promise<DatabaseClient> {
       `);
       console.log("Database migrations completed successfully");
     } catch (migrationError) {
-      console.log("Migration info:", migrationError instanceof Error ? migrationError.message : migrationError);
+      console.log("Migration warning:", migrationError instanceof Error ? migrationError.message : migrationError);
     }
 
     const client = drizzle({
