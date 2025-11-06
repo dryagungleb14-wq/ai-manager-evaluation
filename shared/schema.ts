@@ -215,6 +215,17 @@ export const checklists = pgTable("checklists", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const transcripts = pgTable("transcripts", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  source: text("source", { enum: ["call", "correspondence"] }).notNull(),
+  language: text("language").notNull().default("ru"),
+  text: text("text").notNull(),
+  audioFileName: text("audio_file_name"),
+  duration: integer("duration"), // Duration in seconds
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const analyses = pgTable("analyses", {
   id: serial("id").primaryKey(),
   // Note: userId can be null for backward compatibility with existing data
@@ -222,6 +233,7 @@ export const analyses = pgTable("analyses", {
   userId: integer("user_id").references(() => users.id),
   checklistId: integer("checklist_id").references(() => checklists.id),
   managerId: integer("manager_id").references(() => managers.id),
+  transcriptId: integer("transcript_id").references(() => transcripts.id),
   source: text("source", { enum: ["call", "correspondence"] }).notNull(),
   language: text("language").notNull().default("ru"),
   transcript: text("transcript").notNull(),
@@ -254,6 +266,11 @@ export const insertAnalysisDbSchema = createInsertSchema(analyses).omit({
   analyzedAt: true 
 });
 
+export const insertTranscriptDbSchema = createInsertSchema(transcripts).omit({ 
+  id: true,
+  createdAt: true 
+});
+
 // Types from Drizzle tables
 export type DbUser = typeof users.$inferSelect;
 export type InsertDbUser = z.infer<typeof insertUserDbSchema>;
@@ -263,6 +280,8 @@ export type DbChecklist = typeof checklists.$inferSelect;
 export type InsertDbChecklist = z.infer<typeof insertChecklistDbSchema>;
 export type DbAnalysis = typeof analyses.$inferSelect;
 export type InsertDbAnalysis = z.infer<typeof insertAnalysisDbSchema>;
+export type DbTranscript = typeof transcripts.$inferSelect;
+export type InsertDbTranscript = z.infer<typeof insertTranscriptDbSchema>;
 
 // ============================================
 // Advanced Checklist System (MAX/MID/MIN)
@@ -401,6 +420,7 @@ export const advancedAnalyses = pgTable("advanced_analyses", {
   userId: integer("user_id").references(() => users.id),
   checklistId: integer("checklist_id").references(() => advancedChecklists.id),
   managerId: integer("manager_id").references(() => managers.id),
+  transcriptId: integer("transcript_id").references(() => transcripts.id),
   source: text("source", { enum: ["call", "correspondence"] }).notNull(),
   language: text("language").notNull().default("ru"),
   transcript: text("transcript").notNull(),

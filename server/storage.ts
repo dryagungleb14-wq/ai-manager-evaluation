@@ -8,6 +8,7 @@ import {
   analyses,
   managers,
   users,
+  transcripts,
   AdvancedChecklist,
   AdvancedChecklistReport,
   advancedChecklists,
@@ -100,7 +101,8 @@ class Storage {
     checklistId: string,
     transcript: string,
     managerId?: string,
-    userId?: string
+    userId?: string,
+    transcriptId?: string
   ): Promise<string> {
     try {
       const db = await this.getDb();
@@ -114,6 +116,7 @@ class Storage {
         managerId: managerId ? parseInt(managerId) : null,
         userId: userId ? parseInt(userId) : null,
         checklistId: parseInt(checklistId),
+        transcriptId: transcriptId ? parseInt(transcriptId) : null,
       };
 
       const [inserted] = await db.insert(analyses).values(analysis as any).returning();
@@ -176,6 +179,97 @@ class Storage {
       return true;
     } catch (error) {
       logger.error('storage', error, { operation: 'deleteAnalysis', id });
+      throw error;
+    }
+  }
+
+  // Transcript methods
+  async saveTranscript(
+    text: string,
+    source: "call" | "correspondence",
+    language: string,
+    userId?: string,
+    audioFileName?: string,
+    duration?: number
+  ): Promise<string> {
+    try {
+      const db = await this.getDb();
+      
+      // First, clean up old transcripts to keep only the last 5 per user
+      if (userId) {
+        await this.cleanupOldTranscripts(userId);
+      }
+      
+      const transcript = {
+        text,
+        source,
+        language,
+        userId: userId ? parseInt(userId) : null,
+        audioFileName: audioFileName || null,
+        duration: duration || null,
+      };
+
+      const [inserted] = await db.insert(transcripts).values(transcript as any).returning();
+      return inserted.id.toString();
+    } catch (error) {
+      logger.error('storage', error, { operation: 'saveTranscript' });
+      throw error;
+    }
+  }
+
+  async cleanupOldTranscripts(userId: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      const userTranscripts = await db
+        .select()
+        .from(transcripts)
+        .where(eq(transcripts.userId, parseInt(userId)))
+        .orderBy(desc(transcripts.createdAt));
+      
+      // Keep only the last 5, delete the rest
+      if (userTranscripts.length >= 5) {
+        const toDelete = userTranscripts.slice(4).map(t => t.id);
+        if (toDelete.length > 0) {
+          for (const id of toDelete) {
+            await db.delete(transcripts).where(eq(transcripts.id, id));
+          }
+          logger.info('storage', `Cleaned up ${toDelete.length} old transcripts for user ${userId}`);
+        }
+      }
+    } catch (error) {
+      logger.error('storage', error, { operation: 'cleanupOldTranscripts', userId });
+      // Don't throw - cleanup failure shouldn't prevent transcript save
+    }
+  }
+
+  async getRecentTranscripts(userId: string, limit: number = 5): Promise<any[]> {
+    try {
+      const db = await this.getDb();
+      const results = await db
+        .select()
+        .from(transcripts)
+        .where(eq(transcripts.userId, parseInt(userId)))
+        .orderBy(desc(transcripts.createdAt))
+        .limit(limit);
+      
+      return results;
+    } catch (error) {
+      logger.error('storage', error, { operation: 'getRecentTranscripts', userId });
+      throw error;
+    }
+  }
+
+  async getTranscript(id: string): Promise<any | null> {
+    try {
+      const db = await this.getDb();
+      const [result] = await db
+        .select()
+        .from(transcripts)
+        .where(eq(transcripts.id, parseInt(id)));
+      
+      return result || null;
+    } catch (error) {
+      logger.error('storage', error, { operation: 'getTranscript', id });
       throw error;
     }
   }
@@ -495,7 +589,8 @@ class Storage {
     managerId?: string,
     source: string = 'call',
     language: string = 'ru',
-    userId?: string
+    userId?: string,
+    transcriptId?: string
   ): Promise<string> {
     try {
       const db = await this.getDb();
@@ -508,6 +603,7 @@ class Storage {
         managerId: managerId ? parseInt(managerId) : null,
         userId: userId ? parseInt(userId) : null,
         checklistId: parseInt(checklistId),
+        transcriptId: transcriptId ? parseInt(transcriptId) : null,
       };
 
       const [inserted] = await db.insert(advancedAnalyses).values(analysis as any).returning();

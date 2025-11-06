@@ -143,6 +143,54 @@ export async function registerRoutes(app: Express): Promise<void> {
     });
   });
 
+  // GET /api/transcripts - Get recent transcripts for current user
+  app.get("/api/transcripts", async (req, res) => {
+    try {
+      const userId = req.session.userId?.toString();
+      
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const transcripts = await storage.getRecentTranscripts(userId, 5);
+      res.json(transcripts);
+    } catch (error) {
+      console.error("Get transcripts error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Error retrieving transcripts",
+      });
+    }
+  });
+
+  // GET /api/transcripts/:id - Get specific transcript
+  app.get("/api/transcripts/:id", async (req, res) => {
+    try {
+      const userId = req.session.userId?.toString();
+      
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const transcript = await storage.getTranscript(req.params.id);
+      
+      if (!transcript) {
+        return res.status(404).json({ error: "Transcript not found" });
+      }
+
+      // Verify the transcript belongs to the current user (or user is admin)
+      if (transcript.userId !== parseInt(userId) && req.session.role !== "admin") {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      res.json(transcript);
+    } catch (error) {
+      console.error("Get transcript error:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Error retrieving transcript",
+      });
+    }
+  });
+
   // POST /api/transcribe - Транскрибация аудио
   app.post("/api/transcribe", upload.single("file"), async (req, res) => {
     try {
@@ -151,6 +199,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       }
 
       const language = req.body.language || "ru";
+      const userId = req.session.userId?.toString();
 
       // Transcribe audio
       const result = await transcribeAudio(req.file.path, language);
@@ -167,6 +216,22 @@ export async function registerRoutes(app: Express): Promise<void> {
         },
       ];
 
+      const transcriptText = segments.map((s: any) => s.text).join(" ");
+
+      // Save transcript to database if user is logged in
+      let transcriptId;
+      if (userId) {
+        transcriptId = await storage.saveTranscript(
+          transcriptText,
+          "call",
+          result.language,
+          userId,
+          req.file.originalname,
+          result.duration
+        );
+        console.log(`[transcribe] Saved transcript ${transcriptId} for user ${req.session.username}`);
+      }
+
       res.json({
         transcript: {
           segments,
@@ -174,6 +239,7 @@ export async function registerRoutes(app: Express): Promise<void> {
           duration: result.duration,
         },
         language: result.language,
+        transcriptId,
       });
     } catch (error) {
       // Clean up file on error
@@ -209,6 +275,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       const { transcript, checklist, language = "ru", managerId } = validatedRequest;
       const source = (req.body.source as "call" | "correspondence") || "call";
+      const transcriptId = req.body.transcriptId;
       const userId = req.session.userId?.toString();
 
       // Log analysis start with user info
@@ -235,13 +302,14 @@ export async function registerRoutes(app: Express): Promise<void> {
         language
       );
 
-      // Save analysis to database with managerId and userId
+      // Save analysis to database with managerId, userId, and transcriptId
       const analysisId = await storage.saveAnalysis(
         result,
         checklist.id,
         textToAnalyze,
         managerId ?? undefined,
-        userId
+        userId,
+        transcriptId
       );
 
       console.log(`[analysis] Analysis completed for user ${req.session.username}, saved with ID: ${analysisId}`);
@@ -422,7 +490,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   // POST /api/advanced-checklists/analyze - Анализ с использованием продвинутого чек-листа
   app.post("/api/advanced-checklists/analyze", async (req, res) => {
     try {
-      const { transcript, checklistId, language = "ru", managerId, source = "call" } = req.body;
+      const { transcript, checklistId, language = "ru", managerId, source = "call", transcriptId } = req.body;
       const userId = req.session.userId?.toString();
 
       if (!transcript || !checklistId) {
@@ -452,7 +520,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         language
       );
 
-      // Save analysis with userId
+      // Save analysis with userId and transcriptId
       const analysisId = await storage.saveAdvancedAnalysis(
         result,
         checklistId,
@@ -460,7 +528,8 @@ export async function registerRoutes(app: Express): Promise<void> {
         managerId,
         source,
         language,
-        userId
+        userId,
+        transcriptId
       );
 
       console.log(`[analysis] Advanced analysis completed for user ${req.session.username}, saved with ID: ${analysisId}`);
