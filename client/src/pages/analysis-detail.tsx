@@ -39,8 +39,7 @@ export default function AnalysisDetail() {
         id: analysisId!,
         source: data.checklistReport?.meta?.source || "call",
         language: data.checklistReport?.meta?.language || "ru",
-        analyzedAt: data.checklistReport?.meta?.analyzed_at || new Date().toISOString(),
-        transcript: "",
+analyzedAt: (data.checklistReport?.meta?.analyzed_at instanceof Date ? data.checklistReport?.meta?.analyzed_at.toISOString() : data.checklistReport?.meta?.analyzed_at) || new Date().toISOString(),        transcript: "",
       };
     },
     enabled: !!analysisId,
