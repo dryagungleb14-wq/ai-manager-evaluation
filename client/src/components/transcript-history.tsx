@@ -109,8 +109,7 @@ export function TranscriptHistory({ onTranscriptSelect }: TranscriptHistoryProps
                     <span className="text-xs font-medium">{getSourceLabel(transcript.source)}</span>
                   </div>
                   <p className="text-sm line-clamp-2 text-muted-foreground mb-2">
-                    {transcript.text.substring(0, 100)}
-                    {transcript.text.length > 100 ? "..." : ""}
+                    {transcript.text}
                   </p>
                   <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1">

@@ -17,7 +17,7 @@ import {
   checklistHistory,
   advancedAnalyses,
 } from "./shared/schema.js";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import { getDatabase, type DatabaseClient } from "./db.js";
 import { logger } from "./utils/logger.js";
 import { forUlyanaChecklist } from './data/for-ulyana-checklist.js';
@@ -230,9 +230,7 @@ class Storage {
       if (userTranscripts.length >= 5) {
         const toDelete = userTranscripts.slice(4).map((t: any) => t.id);
         if (toDelete.length > 0) {
-          for (const id of toDelete) {
-            await db.delete(transcripts).where(eq(transcripts.id, id));
-          }
+          await db.delete(transcripts).where(inArray(transcripts.id, toDelete));
           logger.info('storage', `Cleaned up ${toDelete.length} old transcripts for user ${userId}`);
         }
       }
