@@ -156,7 +156,10 @@ export async function registerRoutes(app: Express): Promise<void> {
   // GET /api/transcripts - Get recent transcripts for current user
   app.get("/api/transcripts", requireAuth, async (req, res) => {
     try {
-      const userId = req.session.userId!.toString();
+      const userId = req.session.userId?.toString();
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
 
       const transcripts = await storage.getRecentTranscripts(userId, 5);
       res.json(transcripts);
@@ -171,7 +174,10 @@ export async function registerRoutes(app: Express): Promise<void> {
   // GET /api/transcripts/:id - Get specific transcript
   app.get("/api/transcripts/:id", requireAuth, async (req, res) => {
     try {
-      const userId = req.session.userId!.toString();
+      const userId = req.session.userId?.toString();
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
 
       const transcript = await storage.getTranscript(req.params.id);
       
@@ -601,7 +607,10 @@ export async function registerRoutes(app: Express): Promise<void> {
   app.get("/api/advanced-analyses", requireAuth, async (req, res) => {
     try {
       const userRole = req.session.role;
-      const userId = req.session.userId!.toString();
+      const userId = req.session.userId?.toString();
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
       
       let analyses;
       
@@ -717,7 +726,10 @@ export async function registerRoutes(app: Express): Promise<void> {
   app.get("/api/analyses", requireAuth, async (req, res) => {
     try {
       const userRole = req.session.role;
-      const userId = req.session.userId!.toString();
+      const userId = req.session.userId?.toString();
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
       
       let analyses;
       
