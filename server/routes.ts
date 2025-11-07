@@ -3,6 +3,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { storage, type StoredAnalysis } from "./storage.js";
+import { Storage } from "./storage.js";
 import { transcribeAudio } from "./services/whisper.js";
 import { analyzeConversation } from "./services/gemini-analyzer.js";
 import { analyzeAdvancedChecklist } from "./services/advanced-gemini-analyzer.js";
@@ -211,6 +212,9 @@ export async function registerRoutes(app: Express): Promise<void> {
 
           if (existingTranscript) {
             fs.unlinkSync(req.file.path);
+
+            // Update the timestamp to move this transcript to the top of the history
+            await storage.updateTranscriptTimestamp(existingTranscript.id.toString());
 
             return res.json({
               transcript: existingTranscript.text,
@@ -597,10 +601,17 @@ export async function registerRoutes(app: Express): Promise<void> {
       const userRole = req.session.role;
       const userId = req.session.userId?.toString();
       
-      // Admin can see all analyses, users can only see their own
-      const filterUserId = userRole === "admin" ? undefined : userId;
+      let analyses;
       
-      const analyses = await storage.getAllAdvancedAnalyses(filterUserId);
+      // Admin can see all analyses, users can only see their own recent analyses
+      if (userRole === "admin") {
+        analyses = await storage.getAllAdvancedAnalyses();
+      } else if (userId) {
+        analyses = await storage.getRecentAdvancedAnalyses(userId, Storage.getMaxStoredAnalyses());
+      } else {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      
       res.json(analyses);
     } catch (error) {
       console.error("Get advanced analyses error:", error);
@@ -708,10 +719,17 @@ export async function registerRoutes(app: Express): Promise<void> {
       const userRole = req.session.role;
       const userId = req.session.userId?.toString();
       
-      // Admin can see all analyses, users can only see their own
-      const filterUserId = userRole === "admin" ? undefined : userId;
+      let analyses;
       
-      const analyses = await storage.getAllAnalyses(filterUserId);
+      // Admin can see all analyses, users can only see their own recent analyses
+      if (userRole === "admin") {
+        analyses = await storage.getAllAnalyses();
+      } else if (userId) {
+        analyses = await storage.getRecentAnalyses(userId, Storage.getMaxStoredAnalyses());
+      } else {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      
       res.json(analyses);
     } catch (error) {
       console.error("Get analyses error:", error);

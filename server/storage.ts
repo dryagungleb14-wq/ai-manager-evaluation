@@ -37,9 +37,16 @@ export interface StoredAnalysis {
 class Storage {
   private dbPromise: Promise<DatabaseClient>;
   private static readonly MAX_LOG_VALUE_LENGTH = 100;
+  private static readonly MAX_STORED_TRANSCRIPTS = 5;
+  private static readonly MAX_STORED_ANALYSES = 5;
 
   constructor() {
     this.dbPromise = getDatabase();
+  }
+
+  // Public getter for the max stored analyses limit
+  public static getMaxStoredAnalyses(): number {
+    return Storage.MAX_STORED_ANALYSES;
   }
 
   private async getDb(): Promise<DatabaseClient> {
@@ -106,6 +113,12 @@ class Storage {
   ): Promise<string> {
     try {
       const db = await this.getDb();
+      
+      // First, clean up old analyses to keep only the last 5 per user
+      if (userId) {
+        await this.cleanupOldAnalyses(userId);
+      }
+      
       const analysis = {
         source: result.source || 'call',
         language: result.language || 'ru',
@@ -169,6 +182,56 @@ class Storage {
     } catch (error) {
       logger.error('storage', error, { operation: 'getAllAnalyses' });
       throw error;
+    }
+  }
+
+  async getRecentAnalyses(userId: string, limit: number = 5): Promise<any[]> {
+    try {
+      const db = await this.getDb();
+      const results = await db
+        .select()
+        .from(analyses)
+        .where(eq(analyses.userId, parseInt(userId)))
+        .orderBy(desc(analyses.analyzedAt))
+        .limit(limit);
+      
+      return results.map((r: any) => ({
+        ...r,
+        checklistReport: this.safeParse(r.checklistReport),
+        objectionsReport: this.safeParse(r.objectionsReport),
+      }));
+    } catch (error) {
+      logger.error('storage', error, { operation: 'getRecentAnalyses', userId });
+      throw error;
+    }
+  }
+
+  async cleanupOldAnalyses(userId: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      const userAnalyses = await db
+        .select()
+        .from(analyses)
+        .where(eq(analyses.userId, parseInt(userId)))
+        .orderBy(desc(analyses.analyzedAt));
+
+      // Keep only the last MAX_STORED_ANALYSES, delete the rest
+      if (userAnalyses.length > Storage.MAX_STORED_ANALYSES) {
+        const toDelete = userAnalyses
+          .slice(Storage.MAX_STORED_ANALYSES)
+          .map((a: any) => a.id);
+
+        if (toDelete.length > 0) {
+          await db.delete(analyses).where(inArray(analyses.id, toDelete));
+          logger.info(
+            'storage',
+            `Cleaned up ${toDelete.length} old analyses for user ${userId}`
+          );
+        }
+      }
+    } catch (error) {
+      logger.error('storage', error, { operation: 'cleanupOldAnalyses', userId });
+      // Don't throw - cleanup failure shouldn't prevent analysis save
     }
   }
 
@@ -241,8 +304,6 @@ class Storage {
   }
 
   async cleanupOldTranscripts(userId: string): Promise<void> {
-    const maxStoredTranscripts = 5;
-
     try {
       const db = await this.getDb();
       const userTranscripts = await db
@@ -251,10 +312,10 @@ class Storage {
         .where(eq(transcripts.userId, parseInt(userId)))
         .orderBy(desc(transcripts.createdAt));
 
-      // Keep only the last 5, delete the rest
-      if (userTranscripts.length > maxStoredTranscripts) {
+      // Keep only the last MAX_STORED_TRANSCRIPTS, delete the rest
+      if (userTranscripts.length > Storage.MAX_STORED_TRANSCRIPTS) {
         const toDelete = userTranscripts
-          .slice(maxStoredTranscripts)
+          .slice(Storage.MAX_STORED_TRANSCRIPTS)
           .map((t: any) => t.id);
 
         if (toDelete.length > 0) {
@@ -300,6 +361,20 @@ class Storage {
     } catch (error) {
       logger.error('storage', error, { operation: 'getTranscript', id });
       throw error;
+    }
+  }
+
+  async updateTranscriptTimestamp(id: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db
+        .update(transcripts)
+        .set({ createdAt: new Date() })
+        .where(eq(transcripts.id, parseInt(id)));
+      logger.info('storage', `Updated timestamp for transcript ${id}`);
+    } catch (error) {
+      logger.error('storage', error, { operation: 'updateTranscriptTimestamp', id });
+      // Don't throw - timestamp update failure shouldn't prevent transcript reuse
     }
   }
 
@@ -623,6 +698,12 @@ class Storage {
   ): Promise<string> {
     try {
       const db = await this.getDb();
+      
+      // First, clean up old advanced analyses to keep only the last 5 per user
+      if (userId) {
+        await this.cleanupOldAdvancedAnalyses(userId);
+      }
+      
       const analysis = {
         source,
         language,
@@ -683,6 +764,55 @@ class Storage {
     } catch (error) {
       logger.error('storage', error, { operation: 'getAllAdvancedAnalyses' });
       throw error;
+    }
+  }
+
+  async getRecentAdvancedAnalyses(userId: string, limit: number = 5): Promise<any[]> {
+    try {
+      const db = await this.getDb();
+      const results = await db
+        .select()
+        .from(advancedAnalyses)
+        .where(eq(advancedAnalyses.userId, parseInt(userId)))
+        .orderBy(desc(advancedAnalyses.analyzedAt))
+        .limit(limit);
+      
+      return results.map((r: any) => ({
+        ...r,
+        report: this.safeParse(r.report),
+      }));
+    } catch (error) {
+      logger.error('storage', error, { operation: 'getRecentAdvancedAnalyses', userId });
+      throw error;
+    }
+  }
+
+  async cleanupOldAdvancedAnalyses(userId: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      const userAnalyses = await db
+        .select()
+        .from(advancedAnalyses)
+        .where(eq(advancedAnalyses.userId, parseInt(userId)))
+        .orderBy(desc(advancedAnalyses.analyzedAt));
+
+      // Keep only the last MAX_STORED_ANALYSES, delete the rest
+      if (userAnalyses.length > Storage.MAX_STORED_ANALYSES) {
+        const toDelete = userAnalyses
+          .slice(Storage.MAX_STORED_ANALYSES)
+          .map((a: any) => a.id);
+
+        if (toDelete.length > 0) {
+          await db.delete(advancedAnalyses).where(inArray(advancedAnalyses.id, toDelete));
+          logger.info(
+            'storage',
+            `Cleaned up ${toDelete.length} old advanced analyses for user ${userId}`
+          );
+        }
+      }
+    } catch (error) {
+      logger.error('storage', error, { operation: 'cleanupOldAdvancedAnalyses', userId });
+      // Don't throw - cleanup failure shouldn't prevent analysis save
     }
   }
 
@@ -753,6 +883,7 @@ class Storage {
   }
 }
 
+export { Storage };
 export const storage = new Storage();
 
 // Export variables for storage status
