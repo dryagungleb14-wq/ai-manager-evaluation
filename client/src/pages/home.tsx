@@ -10,6 +10,7 @@ import { UserInfo } from "@/components/user-info";
 import { AnalysisReport, AdvancedChecklistReport } from "@/lib/rest";
 import { buildApiUrl } from "@/lib/apiBase";
 import type { AnyChecklist } from "@/components/checklist-selector";
+import { useAuth } from "@/contexts/auth-provider";
 
 const AudioUpload = lazy(() =>
   import("@/components/audio-upload").then((module) => ({
@@ -48,6 +49,7 @@ const AdvancedChecklistResults = lazy(() =>
 );
 
 export default function Home() {
+  const { isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState<"call" | "correspondence">("call");
   const [transcript, setTranscript] = useState("");
   const [correspondenceText, setCorrespondenceText] = useState("");
@@ -98,6 +100,16 @@ export default function Home() {
   );
 
   const handleAnalyze = async () => {
+    // Guard: require authentication
+    if (!isAuthenticated) {
+      toast({
+        title: "Требуется авторизация",
+        description: "Пожалуйста, войдите в систему для выполнения анализа",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!activeChecklist) {
       toast({
         title: "Ошибка",
@@ -137,6 +149,7 @@ export default function Home() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(requestPayload),
+          credentials: "include",
         });
 
         if (!response.ok) {
@@ -159,6 +172,7 @@ export default function Home() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(requestPayload),
+          credentials: "include",
         });
 
         if (!response.ok) {
@@ -289,7 +303,7 @@ export default function Home() {
                 <Button
                   size="lg"
                   onClick={handleAnalyze}
-                  disabled={isAnalyzing || !activeChecklist}
+                  disabled={isAnalyzing || !activeChecklist || !isAuthenticated}
                   className="w-full"
                   data-testid="button-analyze"
                 >
@@ -301,7 +315,7 @@ export default function Home() {
                   ) : (
                     <>
                       <Sparkles className="mr-2 h-5 w-5" />
-                      Проверить по чек-листу
+                      {isAuthenticated ? "Проверить по чек-листу" : "Войдите для анализа"}
                     </>
                   )}
                 </Button>

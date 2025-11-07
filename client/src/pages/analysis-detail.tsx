@@ -36,7 +36,9 @@ export default function AnalysisDetail() {
         throw new Error("Missing analysis id");
       }
 
-      const res = await fetch(buildApiUrl(`/api/analyses/${analysisId}`));
+      const res = await fetch(buildApiUrl(`/api/analyses/${analysisId}`), {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Failed to fetch metadata");
 
       const data = await res.json();

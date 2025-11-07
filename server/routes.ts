@@ -93,7 +93,7 @@ export async function registerRoutes(app: Express): Promise<void> {
 
       console.log(`[auth] User logged in: ${user.username} (role: ${user.role}, id: ${user.id})`);
 
-      res.json({
+      return res.json({
         success: true,
         user: {
           id: user.id.toString(),
@@ -103,7 +103,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       });
     } catch (error) {
       console.error("Login error:", error);
-      res.status(500).json({ 
+      return res.status(500).json({ 
         success: false, 
         message: "Internal server error" 
       });
@@ -310,13 +310,19 @@ export async function registerRoutes(app: Express): Promise<void> {
   // POST /api/analyze - Анализ диалога
   app.post("/api/analyze", async (req, res) => {
     try {
+      const userId = req.session.userId?.toString();
+
+      // Guard: require authentication for analysis
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
       // Validate entire request body with Zod
       const validatedRequest = analyzeRequestSchema.parse(req.body);
       
       const { transcript, checklist, language = "ru", managerId } = validatedRequest;
       const source = (req.body.source as "call" | "correspondence") || "call";
       const transcriptId = req.body.transcriptId;
-      const userId = req.session.userId?.toString();
 
       // Log analysis start with user info
       console.log(`[analysis] User ${req.session.username} (id: ${userId}) starting analysis with checklist: ${checklist.name}`);
@@ -530,8 +536,14 @@ export async function registerRoutes(app: Express): Promise<void> {
   // POST /api/advanced-checklists/analyze - Анализ с использованием продвинутого чек-листа
   app.post("/api/advanced-checklists/analyze", async (req, res) => {
     try {
-      const { transcript, checklistId, language = "ru", managerId, source = "call", transcriptId } = req.body;
       const userId = req.session.userId?.toString();
+
+      // Guard: require authentication for analysis
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const { transcript, checklistId, language = "ru", managerId, source = "call", transcriptId } = req.body;
 
       if (!transcript || !checklistId) {
         return res.status(400).json({ error: "Требуются transcript и checklistId" });
