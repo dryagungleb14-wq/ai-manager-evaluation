@@ -298,6 +298,11 @@ app.use((req, res, next) => {
   const nodeEnv = process.env.NODE_ENV ?? "production";
   app.set("env", nodeEnv);
 
+  // Trust proxy in production for proper secure cookie handling
+  if (nodeEnv === "production") {
+    app.set("trust proxy", 1);
+  }
+
   const corsMiddleware = createCorsMiddleware();
   app.use(corsMiddleware);
 
@@ -362,12 +367,16 @@ app.use((req, res, next) => {
   
   await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
+    // If headers already sent, delegate to default Express error handler
+    if (res.headersSent) {
+      return next(err);
+    }
+
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
     res.status(status).json({ message });
-    throw err;
   });
 
   // importantly only setup vite in development and after

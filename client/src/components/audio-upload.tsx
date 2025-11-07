@@ -43,6 +43,7 @@ export function AudioUpload({ onTranscript, onTranscriptId, isProcessing, setIsP
       const response = await fetch(buildApiUrl("/api/transcribe"), {
         method: "POST",
         body: formData,
+        credentials: "include",
       });
 
       setProgress(70);

@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -13,6 +13,14 @@ import { parseChecklist, parseAdvancedChecklist, detectChecklistTypeFromFile } f
 import { checklistSchema, analyzeRequestSchema, insertManagerSchema } from "./shared/schema.js";
 import { GeminiServiceError } from "./services/gemini-client.js";
 import { computeFileHash } from "./utils/file-hash.js";
+
+// Middleware to require authentication
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  next();
+}
 
 // Configure multer for audio uploads
 const upload = multer({
@@ -93,7 +101,7 @@ export async function registerRoutes(app: Express): Promise<void> {
 
       console.log(`[auth] User logged in: ${user.username} (role: ${user.role}, id: ${user.id})`);
 
-      res.json({
+      return res.json({
         success: true,
         user: {
           id: user.id.toString(),
@@ -103,7 +111,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       });
     } catch (error) {
       console.error("Login error:", error);
-      res.status(500).json({ 
+      return res.status(500).json({ 
         success: false, 
         message: "Internal server error" 
       });
@@ -146,10 +154,9 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // GET /api/transcripts - Get recent transcripts for current user
-  app.get("/api/transcripts", async (req, res) => {
+  app.get("/api/transcripts", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId?.toString();
-      
       if (!userId) {
         return res.status(401).json({ error: "Authentication required" });
       }
@@ -165,10 +172,9 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // GET /api/transcripts/:id - Get specific transcript
-  app.get("/api/transcripts/:id", async (req, res) => {
+  app.get("/api/transcripts/:id", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId?.toString();
-      
       if (!userId) {
         return res.status(401).json({ error: "Authentication required" });
       }
@@ -308,15 +314,16 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // POST /api/analyze - Анализ диалога
-  app.post("/api/analyze", async (req, res) => {
+  app.post("/api/analyze", requireAuth, async (req, res) => {
     try {
+      const userId = req.session.userId?.toString();
+
       // Validate entire request body with Zod
       const validatedRequest = analyzeRequestSchema.parse(req.body);
       
       const { transcript, checklist, language = "ru", managerId } = validatedRequest;
       const source = (req.body.source as "call" | "correspondence") || "call";
       const transcriptId = req.body.transcriptId;
-      const userId = req.session.userId?.toString();
 
       // Log analysis start with user info
       console.log(`[analysis] User ${req.session.username} (id: ${userId}) starting analysis with checklist: ${checklist.name}`);
@@ -528,10 +535,11 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // POST /api/advanced-checklists/analyze - Анализ с использованием продвинутого чек-листа
-  app.post("/api/advanced-checklists/analyze", async (req, res) => {
+  app.post("/api/advanced-checklists/analyze", requireAuth, async (req, res) => {
     try {
-      const { transcript, checklistId, language = "ru", managerId, source = "call", transcriptId } = req.body;
       const userId = req.session.userId?.toString();
+
+      const { transcript, checklistId, language = "ru", managerId, source = "call", transcriptId } = req.body;
 
       if (!transcript || !checklistId) {
         return res.status(400).json({ error: "Требуются transcript и checklistId" });
@@ -596,20 +604,21 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // GET /api/advanced-analyses - Получить историю продвинутых анализов (с фильтрацией для обычных пользователей)
-  app.get("/api/advanced-analyses", async (req, res) => {
+  app.get("/api/advanced-analyses", requireAuth, async (req, res) => {
     try {
       const userRole = req.session.role;
       const userId = req.session.userId?.toString();
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
       
       let analyses;
       
       // Admin can see all analyses, users can only see their own recent analyses
       if (userRole === "admin") {
         analyses = await storage.getAllAdvancedAnalyses();
-      } else if (userId) {
-        analyses = await storage.getRecentAdvancedAnalyses(userId, Storage.getMaxStoredAnalyses());
       } else {
-        return res.status(401).json({ error: "Authentication required" });
+        analyses = await storage.getRecentAdvancedAnalyses(userId, Storage.getMaxStoredAnalyses());
       }
       
       res.json(analyses);
@@ -714,20 +723,21 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // GET /api/analyses - Получить все анализы (с фильтрацией для обычных пользователей)
-  app.get("/api/analyses", async (req, res) => {
+  app.get("/api/analyses", requireAuth, async (req, res) => {
     try {
       const userRole = req.session.role;
       const userId = req.session.userId?.toString();
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
       
       let analyses;
       
       // Admin can see all analyses, users can only see their own recent analyses
       if (userRole === "admin") {
         analyses = await storage.getAllAnalyses();
-      } else if (userId) {
-        analyses = await storage.getRecentAnalyses(userId, Storage.getMaxStoredAnalyses());
       } else {
-        return res.status(401).json({ error: "Authentication required" });
+        analyses = await storage.getRecentAnalyses(userId, Storage.getMaxStoredAnalyses());
       }
       
       res.json(analyses);

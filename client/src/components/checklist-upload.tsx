@@ -32,6 +32,7 @@ export function ChecklistUpload({ onChecklistCreated }: ChecklistUploadProps) {
       const response = await fetch(buildApiUrl("/api/checklists/upload"), {
         method: "POST",
         body: formData,
+        credentials: "include",
       });
 
       if (!response.ok) {
