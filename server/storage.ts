@@ -37,6 +37,8 @@ export interface StoredAnalysis {
 class Storage {
   private dbPromise: Promise<DatabaseClient>;
   private static readonly MAX_LOG_VALUE_LENGTH = 100;
+  private static readonly MAX_STORED_TRANSCRIPTS = 5;
+  private static readonly MAX_STORED_ANALYSES = 5;
 
   constructor() {
     this.dbPromise = getDatabase();
@@ -200,8 +202,6 @@ class Storage {
   }
 
   async cleanupOldAnalyses(userId: string): Promise<void> {
-    const maxStoredAnalyses = 5;
-
     try {
       const db = await this.getDb();
       const userAnalyses = await db
@@ -210,10 +210,10 @@ class Storage {
         .where(eq(analyses.userId, parseInt(userId)))
         .orderBy(desc(analyses.analyzedAt));
 
-      // Keep only the last 5, delete the rest
-      if (userAnalyses.length > maxStoredAnalyses) {
+      // Keep only the last MAX_STORED_ANALYSES, delete the rest
+      if (userAnalyses.length > Storage.MAX_STORED_ANALYSES) {
         const toDelete = userAnalyses
-          .slice(maxStoredAnalyses)
+          .slice(Storage.MAX_STORED_ANALYSES)
           .map((a: any) => a.id);
 
         if (toDelete.length > 0) {
@@ -299,8 +299,6 @@ class Storage {
   }
 
   async cleanupOldTranscripts(userId: string): Promise<void> {
-    const maxStoredTranscripts = 5;
-
     try {
       const db = await this.getDb();
       const userTranscripts = await db
@@ -309,10 +307,10 @@ class Storage {
         .where(eq(transcripts.userId, parseInt(userId)))
         .orderBy(desc(transcripts.createdAt));
 
-      // Keep only the last 5, delete the rest
-      if (userTranscripts.length > maxStoredTranscripts) {
+      // Keep only the last MAX_STORED_TRANSCRIPTS, delete the rest
+      if (userTranscripts.length > Storage.MAX_STORED_TRANSCRIPTS) {
         const toDelete = userTranscripts
-          .slice(maxStoredTranscripts)
+          .slice(Storage.MAX_STORED_TRANSCRIPTS)
           .map((t: any) => t.id);
 
         if (toDelete.length > 0) {
@@ -785,8 +783,6 @@ class Storage {
   }
 
   async cleanupOldAdvancedAnalyses(userId: string): Promise<void> {
-    const maxStoredAnalyses = 5;
-
     try {
       const db = await this.getDb();
       const userAnalyses = await db
@@ -795,10 +791,10 @@ class Storage {
         .where(eq(advancedAnalyses.userId, parseInt(userId)))
         .orderBy(desc(advancedAnalyses.analyzedAt));
 
-      // Keep only the last 5, delete the rest
-      if (userAnalyses.length > maxStoredAnalyses) {
+      // Keep only the last MAX_STORED_ANALYSES, delete the rest
+      if (userAnalyses.length > Storage.MAX_STORED_ANALYSES) {
         const toDelete = userAnalyses
-          .slice(maxStoredAnalyses)
+          .slice(Storage.MAX_STORED_ANALYSES)
           .map((a: any) => a.id);
 
         if (toDelete.length > 0) {
