@@ -32,14 +32,26 @@ export default function AnalysisDetail() {
   const { data: metadata } = useQuery<AnalysisMetadata>({
     queryKey: ["/api/analyses", analysisId, "metadata"],
     queryFn: async () => {
+      if (!analysisId) {
+        throw new Error("Missing analysis id");
+      }
+
       const res = await fetch(buildApiUrl(`/api/analyses/${analysisId}`));
       if (!res.ok) throw new Error("Failed to fetch metadata");
+
       const data = await res.json();
       return {
-        id: analysisId!,
-        source: data.checklistReport?.meta?.source || "call",
-        language: data.checklistReport?.meta?.language || "ru",
-analyzedAt: data.checklistReport?.meta?.analyzed_at || new Date().toISOString(),      };
+        id: analysisId,
+        source:
+          data.source ?? data.checklistReport?.meta?.source ?? "call",
+        language:
+          data.language ?? data.checklistReport?.meta?.language ?? "ru",
+        analyzedAt:
+          data.analyzedAt ??
+          data.checklistReport?.meta?.analyzed_at ??
+          new Date().toISOString(),
+        transcript: data.transcript ?? "",
+      } satisfies AnalysisMetadata;
     },
     enabled: !!analysisId,
   });

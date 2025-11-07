@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { pgTable, serial, integer, text, jsonb, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, jsonb, timestamp, boolean, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 
 // Типы чек-листов
@@ -215,16 +215,26 @@ export const checklists = pgTable("checklists", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const transcripts = pgTable("transcripts", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").references(() => users.id),
-  source: text("source", { enum: ["call", "correspondence"] }).notNull(),
-  language: text("language").notNull().default("ru"),
-  text: text("text").notNull(),
-  audioFileName: text("audio_file_name"),
-  duration: integer("duration"), // Duration in seconds
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export const transcripts = pgTable(
+  "transcripts",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").references(() => users.id),
+    source: text("source", { enum: ["call", "correspondence"] }).notNull(),
+    language: text("language").notNull().default("ru"),
+    text: text("text").notNull(),
+    audioFileName: text("audio_file_name"),
+    duration: integer("duration"), // Duration in seconds
+    audioHash: text("audio_hash"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userAudioHashIdx: uniqueIndex("transcripts_user_audio_hash_idx").on(
+      table.userId,
+      table.audioHash
+    ),
+  })
+);
 
 export const analyses = pgTable("analyses", {
   id: serial("id").primaryKey(),

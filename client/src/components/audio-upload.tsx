@@ -12,9 +12,14 @@ interface AudioUploadProps {
   isProcessing: boolean;
   setIsProcessing: (value: boolean) => void;
   onUploadStart?: () => void;
+  onDuplicateTranscript?: (info: {
+    transcriptId: string;
+    audioFileName?: string | null;
+    createdAt?: string | null;
+  }) => void;
 }
 
-export function AudioUpload({ onTranscript, onTranscriptId, isProcessing, setIsProcessing, onUploadStart }: AudioUploadProps) {
+export function AudioUpload({ onTranscript, onTranscriptId, isProcessing, setIsProcessing, onUploadStart, onDuplicateTranscript }: AudioUploadProps) {
   const [progress, setProgress] = useState(0);
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +71,15 @@ export function AudioUpload({ onTranscript, onTranscriptId, isProcessing, setIsP
       if (data.transcriptId && onTranscriptId) {
         onTranscriptId(data.transcriptId);
       }
-      
+
+      if (data.reusedTranscript && data.transcriptId && onDuplicateTranscript) {
+        onDuplicateTranscript({
+          transcriptId: data.transcriptId,
+          audioFileName: data.audioFileName ?? null,
+          createdAt: data.createdAt ?? null,
+        });
+      }
+
       setProgress(100);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Произошла ошибка");
@@ -74,7 +87,7 @@ export function AudioUpload({ onTranscript, onTranscriptId, isProcessing, setIsP
     } finally {
       setIsProcessing(false);
     }
-  }, [onTranscript, onTranscriptId, setIsProcessing, onUploadStart]);
+  }, [onTranscript, onTranscriptId, setIsProcessing, onUploadStart, onDuplicateTranscript]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

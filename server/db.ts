@@ -12,9 +12,12 @@ export interface DatabaseClient {
 }
 
 async function createLocalDatabase(): Promise<DatabaseClient> {
-  const { default: Database } = await import("better-sqlite3");
+  const { default: BetterSqlite3 } = await import("better-sqlite3");
   const { drizzle } = await import("drizzle-orm/better-sqlite3");
-  const sqlite = new Database("local.db");
+  const sqlite = new BetterSqlite3("local.db") as unknown as {
+    exec: (sql: string) => void;
+    pragma: (query: string) => Array<{ name: string }>;
+  };
 
   // Don't pass schema to drizzle for SQLite - it uses PostgreSQL-specific functions
   const client = drizzle(sqlite) as unknown as DatabaseClient;
@@ -53,9 +56,13 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       text TEXT NOT NULL,
       audio_file_name TEXT,
       duration INTEGER,
+      audio_hash TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
+    CREATE UNIQUE INDEX IF NOT EXISTS transcripts_user_audio_hash_idx
+      ON transcripts (user_id, audio_hash)
+      WHERE audio_hash IS NOT NULL AND user_id IS NOT NULL;
     CREATE TABLE IF NOT EXISTS analyses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
@@ -135,15 +142,32 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
   // Run migrations to add missing columns
   try {
     // Check if transcript_id column exists in advanced_analyses
-    const tableInfo = sqlite.pragma("table_info(advanced_analyses)") as Array<{ name: string }>;
-    const hasTranscriptId = tableInfo.some(col => col.name === 'transcript_id');
-    
+    const advancedTableInfo = sqlite.pragma("table_info(advanced_analyses)");
+    const hasTranscriptId = advancedTableInfo.some(col => col.name === 'transcript_id');
+
     if (!hasTranscriptId) {
       sqlite.exec(`
         ALTER TABLE advanced_analyses ADD COLUMN transcript_id INTEGER REFERENCES transcripts(id);
       `);
       console.log("Added transcript_id column to advanced_analyses table");
     }
+
+    // Ensure transcripts table has audio_hash column and index
+    const transcriptTableInfo = sqlite.pragma("table_info(transcripts)");
+    const hasAudioHash = transcriptTableInfo.some(col => col.name === 'audio_hash');
+
+    if (!hasAudioHash) {
+      sqlite.exec(`
+        ALTER TABLE transcripts ADD COLUMN audio_hash TEXT;
+      `);
+      console.log("Added audio_hash column to transcripts table");
+    }
+
+    sqlite.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS transcripts_user_audio_hash_idx
+        ON transcripts (user_id, audio_hash)
+        WHERE audio_hash IS NOT NULL AND user_id IS NOT NULL;
+    `);
   } catch (migrationError) {
     console.log("Migration warning:", migrationError instanceof Error ? migrationError.message : migrationError);
   }
@@ -202,9 +226,13 @@ async function createRemoteDatabase(): Promise<DatabaseClient> {
           text TEXT NOT NULL,
           audio_file_name VARCHAR(255),
           duration INTEGER,
+          audio_hash TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (user_id) REFERENCES users(id)
         );
+        CREATE UNIQUE INDEX IF NOT EXISTS transcripts_user_audio_hash_idx
+          ON transcripts (user_id, audio_hash)
+          WHERE audio_hash IS NOT NULL AND user_id IS NOT NULL;
         CREATE TABLE IF NOT EXISTS analyses (
           id SERIAL PRIMARY KEY,
           user_id INTEGER,
@@ -300,10 +328,21 @@ async function createRemoteDatabase(): Promise<DatabaseClient> {
             ) THEN
                 ALTER TABLE advanced_analyses
                 ADD COLUMN transcript_id INTEGER REFERENCES transcripts(id);
-                
+
                 RAISE NOTICE 'Column transcript_id added to advanced_analyses table';
             END IF;
         END $$;
+      `);
+
+      await pool.query(`
+        ALTER TABLE transcripts
+        ADD COLUMN IF NOT EXISTS audio_hash TEXT;
+      `);
+
+      await pool.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS transcripts_user_audio_hash_idx
+          ON transcripts (user_id, audio_hash)
+          WHERE audio_hash IS NOT NULL AND user_id IS NOT NULL;
       `);
       console.log("Database migrations completed successfully");
     } catch (migrationError) {

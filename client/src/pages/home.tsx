@@ -61,6 +61,7 @@ interface SavedTranscript {
   audioFileName: string | null;
   duration: number | null;
   createdAt: string;
+  audioHash?: string | null;
 }
 
 export default function Home() {
@@ -121,6 +122,21 @@ export default function Home() {
     setCurrentTranscriptId(null);
     setIsFromHistory(false);
   }, [handleResetAnalysis]);
+
+  const handleDuplicateTranscript = useCallback(
+    ({ transcriptId, audioFileName }: { transcriptId: string; audioFileName?: string | null }) => {
+      setCurrentTranscriptId(transcriptId);
+      setIsFromHistory(true);
+
+      toast({
+        title: "Использован сохранённый транскрипт",
+        description: audioFileName
+          ? `Файл «${audioFileName}» уже был обработан ранее. Загружена сохранённая версия.`
+          : "Этот аудио уже был обработан. Загружена сохранённая версия транскрипта.",
+      });
+    },
+    [toast]
+  );
 
   const handleAnalyze = async () => {
     if (!activeChecklist) {
@@ -273,6 +289,7 @@ export default function Home() {
                     isProcessing={isProcessingAudio}
                     setIsProcessing={setIsProcessingAudio}
                     onUploadStart={handleUploadStart}
+                    onDuplicateTranscript={handleDuplicateTranscript}
                   />
                 </Suspense>
 
