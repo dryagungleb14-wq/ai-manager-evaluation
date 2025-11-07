@@ -1,5 +1,8 @@
-56
-  import { AnalysisReport, ChecklistReportItem } from "../shared/schema.js";
+import PDFDocument from "pdfkit";
+import type PDFKit from "pdfkit";
+import type { AnalysisReport } from "../shared/schema.js";
+
+type TextOptionsWithItalics = PDFKit.Mixins.TextOptions & { italics?: boolean };
 
 interface PDFOptions {
   title?: string;
@@ -39,8 +42,16 @@ export function generatePDFReport(
     doc.moveDown(0.3);
   };
 
-  const addText = (text: string, options: any = {}) => {
-    doc.fontSize(11).font("Helvetica").text(text, options);
+  const addText = (
+    text: string,
+    options: TextOptionsWithItalics = {}
+  ) => {
+    const { italics, ...textOptions } = options;
+    const fontName = italics ? "Helvetica-Oblique" : "Helvetica";
+    doc.fontSize(11).font(fontName).text(text, textOptions);
+    if (italics) {
+      doc.font("Helvetica");
+    }
   };
 
   const addSeparator = () => {

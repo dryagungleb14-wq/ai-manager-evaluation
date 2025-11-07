@@ -11,6 +11,7 @@ import { generatePDFReport } from "./services/pdf-generator.js";
 import { parseChecklist, parseAdvancedChecklist, detectChecklistTypeFromFile } from "./services/checklist-parser.js";
 import { checklistSchema, analyzeRequestSchema, insertManagerSchema } from "./shared/schema.js";
 import { GeminiServiceError } from "./services/gemini-client.js";
+import { computeFileHash } from "./utils/file-hash.js";
 
 // Configure multer for audio uploads
 const upload = multer({
@@ -201,8 +202,39 @@ export async function registerRoutes(app: Express): Promise<void> {
       const language = req.body.language || "ru";
       const userId = req.session.userId?.toString();
 
+      let fileHash: string | undefined;
+
+      if (userId) {
+        try {
+          fileHash = await computeFileHash(req.file.path);
+          const existingTranscript = await storage.findTranscriptByHash(userId, fileHash);
+
+          if (existingTranscript) {
+            fs.unlinkSync(req.file.path);
+
+            return res.json({
+              transcript: existingTranscript.text,
+              language: existingTranscript.language,
+              transcriptId: existingTranscript.id.toString(),
+              audioFileName: existingTranscript.audioFileName,
+              duration: existingTranscript.duration,
+              source: existingTranscript.source,
+              createdAt:
+                existingTranscript.createdAt instanceof Date
+                  ? existingTranscript.createdAt.toISOString()
+                  : existingTranscript.createdAt,
+              reusedTranscript: true,
+            });
+          }
+        } catch (error) {
+          console.error("Error computing or checking audio hash:", error);
+          // Continue with transcription even if hash computation fails
+        }
+      }
+
       // Transcribe audio
       const result = await transcribeAudio(req.file.path, language);
+      const resolvedLanguage = result.language || language || "ru";
 
       // Clean up uploaded file
       fs.unlinkSync(req.file.path);
@@ -224,10 +256,11 @@ export async function registerRoutes(app: Express): Promise<void> {
         transcriptId = await storage.saveTranscript(
           transcriptText,
           "call",
-          result.language,
+          resolvedLanguage,
           userId,
           req.file.originalname,
-          result.duration
+          result.duration,
+          fileHash
         );
         console.log(`[transcribe] Saved transcript ${transcriptId} for user ${req.session.username}`);
       }
@@ -235,11 +268,14 @@ export async function registerRoutes(app: Express): Promise<void> {
       res.json({
         transcript: {
           segments,
-          language: result.language,
+          language: resolvedLanguage,
           duration: result.duration,
         },
-        language: result.language,
+        language: resolvedLanguage,
         transcriptId,
+        audioFileName: req.file.originalname,
+        duration: result.duration,
+        reusedTranscript: false,
       });
     } catch (error) {
       // Clean up file on error

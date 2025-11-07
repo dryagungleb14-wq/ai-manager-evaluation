@@ -17,7 +17,7 @@ import {
   checklistHistory,
   advancedAnalyses,
 } from "./shared/schema.js";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, desc, inArray, and } from "drizzle-orm";
 import { getDatabase, type DatabaseClient } from "./db.js";
 import { logger } from "./utils/logger.js";
 import { forUlyanaChecklist } from './data/for-ulyana-checklist.js';
@@ -190,7 +190,8 @@ class Storage {
     language: string,
     userId?: string,
     audioFileName?: string,
-    duration?: number
+    duration?: number,
+    audioHash?: string
   ): Promise<string> {
     try {
       const db = await this.getDb();
@@ -207,6 +208,7 @@ class Storage {
         userId: userId ? parseInt(userId) : null,
         audioFileName: audioFileName || null,
         duration: duration || null,
+        audioHash: audioHash || null,
       };
 
       const [inserted] = await db.insert(transcripts).values(transcript as any).returning();
@@ -217,7 +219,30 @@ class Storage {
     }
   }
 
+  async findTranscriptByHash(userId: string, audioHash: string): Promise<any | null> {
+    try {
+      const db = await this.getDb();
+      const [existing] = await db
+        .select()
+        .from(transcripts)
+        .where(
+          and(
+            eq(transcripts.userId, parseInt(userId)),
+            eq(transcripts.audioHash, audioHash)
+          )
+        )
+        .limit(1);
+
+      return existing ?? null;
+    } catch (error) {
+      logger.error('storage', error, { operation: 'findTranscriptByHash', userId, audioHash });
+      throw error;
+    }
+  }
+
   async cleanupOldTranscripts(userId: string): Promise<void> {
+    const maxStoredTranscripts = 5;
+
     try {
       const db = await this.getDb();
       const userTranscripts = await db
@@ -225,13 +250,19 @@ class Storage {
         .from(transcripts)
         .where(eq(transcripts.userId, parseInt(userId)))
         .orderBy(desc(transcripts.createdAt));
-      
+
       // Keep only the last 5, delete the rest
-      if (userTranscripts.length >= 5) {
-        const toDelete = userTranscripts.slice(4).map((t: any) => t.id);
+      if (userTranscripts.length > maxStoredTranscripts) {
+        const toDelete = userTranscripts
+          .slice(maxStoredTranscripts)
+          .map((t: any) => t.id);
+
         if (toDelete.length > 0) {
           await db.delete(transcripts).where(inArray(transcripts.id, toDelete));
-          logger.info('storage', `Cleaned up ${toDelete.length} old transcripts for user ${userId}`);
+          logger.info(
+            'storage',
+            `Cleaned up ${toDelete.length} old transcripts for user ${userId}`
+          );
         }
       }
     } catch (error) {
