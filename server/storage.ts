@@ -44,6 +44,11 @@ class Storage {
     this.dbPromise = getDatabase();
   }
 
+  // Public getter for the max stored analyses limit
+  public static getMaxStoredAnalyses(): number {
+    return Storage.MAX_STORED_ANALYSES;
+  }
+
   private async getDb(): Promise<DatabaseClient> {
     return this.dbPromise;
   }
@@ -878,6 +883,7 @@ class Storage {
   }
 }
 
+export { Storage };
 export const storage = new Storage();
 
 // Export variables for storage status
