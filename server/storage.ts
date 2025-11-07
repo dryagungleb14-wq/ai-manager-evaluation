@@ -270,6 +270,7 @@ class Storage {
         language,
         userId: userId ? parseInt(userId) : null,
         audioFileName: audioFileName || null,
+        filename: audioFileName || null,  // Also populate filename field
         duration: duration || null,
         audioHash: audioHash || null,
       };
@@ -367,6 +368,7 @@ class Storage {
   async updateTranscriptTimestamp(id: string): Promise<void> {
     try {
       const db = await this.getDb();
+      // Note: updatedAt is automatically updated by database trigger
       await db
         .update(transcripts)
         .set({ createdAt: new Date() })
