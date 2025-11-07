@@ -6,6 +6,7 @@ import path from "node:path";
 import { registerRoutes } from "./routes.js";
 import { setupVite, serveStatic, log } from "./vite-server.js";
 import { createAuthGuard } from "./auth-guard.js";
+import type { Checklist } from "./shared/schema.js";
 import {
   seedDefaultChecklists,
   seedDefaultAdvancedChecklists,
@@ -348,7 +349,7 @@ app.use((req, res, next) => {
 
   // Seed default checklists on startup (only if database is empty)
   // Only advanced checklists are used now (seeded via seedDefaultAdvancedChecklists)
-  const defaultChecklists: any[] = [];
+  const defaultChecklists: Checklist[] = [];
 
   await seedDefaultChecklists(defaultChecklists);
   await seedDefaultAdvancedChecklists();
