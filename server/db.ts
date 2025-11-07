@@ -132,6 +132,22 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
     CREATE INDEX IF NOT EXISTS idx_session_expire ON session(expire);
   `);
 
+  // Run migrations to add missing columns
+  try {
+    // Check if transcript_id column exists in advanced_analyses
+    const tableInfo = sqlite.pragma("table_info(advanced_analyses)") as Array<{ name: string }>;
+    const hasTranscriptId = tableInfo.some(col => col.name === 'transcript_id');
+    
+    if (!hasTranscriptId) {
+      sqlite.exec(`
+        ALTER TABLE advanced_analyses ADD COLUMN transcript_id INTEGER REFERENCES transcripts(id);
+      `);
+      console.log("Added transcript_id column to advanced_analyses table");
+    }
+  } catch (migrationError) {
+    console.log("Migration warning:", migrationError instanceof Error ? migrationError.message : migrationError);
+  }
+
   return client;
 }
 
@@ -267,6 +283,31 @@ async function createRemoteDatabase(): Promise<DatabaseClient> {
       console.log("Database tables created successfully");
     } catch (tableError) {
       console.log("Table creation info:", tableError instanceof Error ? tableError.message : tableError);
+    }
+
+    // Run migrations to add missing columns
+    console.log("Running database migrations...");
+    try {
+      // Migration: Add transcript_id to advanced_analyses if it doesn't exist
+      await pool.query(`
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = 'advanced_analyses'
+                AND column_name = 'transcript_id'
+            ) THEN
+                ALTER TABLE advanced_analyses
+                ADD COLUMN transcript_id INTEGER REFERENCES transcripts(id);
+                
+                RAISE NOTICE 'Column transcript_id added to advanced_analyses table';
+            END IF;
+        END $$;
+      `);
+      console.log("Database migrations completed successfully");
+    } catch (migrationError) {
+      console.log("Migration warning:", migrationError instanceof Error ? migrationError.message : migrationError);
     }
 
     const client = drizzle({
