@@ -228,7 +228,7 @@ export const transcripts = pgTable(
     duration: integer("duration"), // Duration in seconds
     audioHash: text("audio_hash"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(), // Auto-updated by database trigger
   },
   (table) => ({
     userAudioHashIdx: uniqueIndex("transcripts_user_audio_hash_idx").on(

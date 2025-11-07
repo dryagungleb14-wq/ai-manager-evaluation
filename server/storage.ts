@@ -368,12 +368,10 @@ class Storage {
   async updateTranscriptTimestamp(id: string): Promise<void> {
     try {
       const db = await this.getDb();
+      // Note: updatedAt is automatically updated by database trigger
       await db
         .update(transcripts)
-        .set({ 
-          createdAt: new Date(),
-          updatedAt: new Date()
-        })
+        .set({ createdAt: new Date() })
         .where(eq(transcripts.id, parseInt(id)));
       logger.info('storage', `Updated timestamp for transcript ${id}`);
     } catch (error) {
