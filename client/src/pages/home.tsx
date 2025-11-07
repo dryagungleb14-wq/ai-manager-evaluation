@@ -47,23 +47,6 @@ const AdvancedChecklistResults = lazy(() =>
   }))
 );
 
-const TranscriptHistory = lazy(() =>
-  import("@/components/transcript-history").then((module) => ({
-    default: module.TranscriptHistory,
-  }))
-);
-
-interface SavedTranscript {
-  id: number;
-  text: string;
-  source: "call" | "correspondence";
-  language: string;
-  audioFileName: string | null;
-  duration: number | null;
-  createdAt: string;
-  audioHash?: string | null;
-}
-
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"call" | "correspondence">("call");
   const [transcript, setTranscript] = useState("");
@@ -85,30 +68,6 @@ export default function Home() {
   const handleChecklistChange = useCallback((checklist: AnyChecklist) => {
     setActiveChecklist(checklist);
   }, []);
-
-  // Handle selecting a transcript from history
-  const handleTranscriptSelect = useCallback((savedTranscript: SavedTranscript) => {
-    // Set the transcript text
-    if (savedTranscript.source === "call") {
-      setTranscript(savedTranscript.text);
-      setActiveTab("call");
-    } else {
-      setCorrespondenceText(savedTranscript.text);
-      setActiveTab("correspondence");
-    }
-    
-    // Store the transcript ID for re-evaluation
-    setCurrentTranscriptId(savedTranscript.id.toString());
-    setIsFromHistory(true);
-    
-    // Reset analysis when loading a saved transcript
-    setAnalysisReport(null);
-    
-    toast({
-      title: "Транскрипт загружен",
-      description: "Теперь вы можете провести анализ по чек-листу",
-    });
-  }, [toast]);
 
   // Handle new transcript from audio upload
   const handleNewTranscriptId = useCallback((transcriptId: string) => {
@@ -376,16 +335,6 @@ export default function Home() {
               }
             >
               <ChecklistSelector onChecklistChange={handleChecklistChange} />
-            </Suspense>
-            
-            <Suspense
-              fallback={
-                <Card className="p-6 text-center text-muted-foreground">
-                  Загрузка истории транскриптов...
-                </Card>
-              }
-            >
-              <TranscriptHistory onTranscriptSelect={handleTranscriptSelect} />
             </Suspense>
           </aside>
         </div>
