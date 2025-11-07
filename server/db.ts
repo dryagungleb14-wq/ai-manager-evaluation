@@ -55,9 +55,11 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       language TEXT NOT NULL DEFAULT 'ru',
       text TEXT NOT NULL,
       audio_file_name TEXT,
+      filename TEXT,
       duration INTEGER,
       audio_hash TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
     CREATE UNIQUE INDEX IF NOT EXISTS transcripts_user_audio_hash_idx
@@ -152,9 +154,11 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       console.log("Added transcript_id column to advanced_analyses table");
     }
 
-    // Ensure transcripts table has audio_hash column and index
+    // Ensure transcripts table has all required columns
     const transcriptTableInfo = sqlite.pragma("table_info(transcripts)");
     const hasAudioHash = transcriptTableInfo.some(col => col.name === 'audio_hash');
+    const hasUpdatedAt = transcriptTableInfo.some(col => col.name === 'updated_at');
+    const hasFilename = transcriptTableInfo.some(col => col.name === 'filename');
 
     if (!hasAudioHash) {
       sqlite.exec(`
@@ -163,10 +167,43 @@ async function createLocalDatabase(): Promise<DatabaseClient> {
       console.log("Added audio_hash column to transcripts table");
     }
 
+    if (!hasUpdatedAt) {
+      sqlite.exec(`
+        ALTER TABLE transcripts ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP;
+      `);
+      console.log("Added updated_at column to transcripts table");
+    }
+
+    if (!hasFilename) {
+      sqlite.exec(`
+        ALTER TABLE transcripts ADD COLUMN filename TEXT;
+      `);
+      console.log("Added filename column to transcripts table");
+      
+      // Copy audio_file_name to filename for existing records
+      sqlite.exec(`
+        UPDATE transcripts SET filename = audio_file_name WHERE filename IS NULL AND audio_file_name IS NOT NULL;
+      `);
+    }
+
     sqlite.exec(`
       CREATE UNIQUE INDEX IF NOT EXISTS transcripts_user_audio_hash_idx
         ON transcripts (user_id, audio_hash)
         WHERE audio_hash IS NOT NULL AND user_id IS NOT NULL;
+    `);
+
+    // Create trigger for updated_at in SQLite
+    sqlite.exec(`
+      DROP TRIGGER IF EXISTS transcripts_updated_at_trigger;
+    `);
+
+    sqlite.exec(`
+      CREATE TRIGGER IF NOT EXISTS transcripts_updated_at_trigger
+      AFTER UPDATE ON transcripts
+      FOR EACH ROW
+      BEGIN
+        UPDATE transcripts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+      END;
     `);
   } catch (migrationError) {
     console.log("Migration warning:", migrationError instanceof Error ? migrationError.message : migrationError);
@@ -225,9 +262,11 @@ async function createRemoteDatabase(): Promise<DatabaseClient> {
           language VARCHAR(10) NOT NULL DEFAULT 'ru',
           text TEXT NOT NULL,
           audio_file_name VARCHAR(255),
+          filename VARCHAR(255),
           duration INTEGER,
           audio_hash TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (user_id) REFERENCES users(id)
         );
         CREATE UNIQUE INDEX IF NOT EXISTS transcripts_user_audio_hash_idx
@@ -340,9 +379,48 @@ async function createRemoteDatabase(): Promise<DatabaseClient> {
       `);
 
       await pool.query(`
+        ALTER TABLE transcripts
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+      `);
+
+      await pool.query(`
+        ALTER TABLE transcripts
+        ADD COLUMN IF NOT EXISTS filename TEXT;
+      `);
+
+      // Copy audio_file_name to filename for existing records
+      await pool.query(`
+        UPDATE transcripts
+        SET filename = audio_file_name
+        WHERE filename IS NULL AND audio_file_name IS NOT NULL;
+      `);
+
+      await pool.query(`
         CREATE UNIQUE INDEX IF NOT EXISTS transcripts_user_audio_hash_idx
           ON transcripts (user_id, audio_hash)
           WHERE audio_hash IS NOT NULL AND user_id IS NOT NULL;
+      `);
+
+      // Create or replace trigger function for updated_at
+      await pool.query(`
+        CREATE OR REPLACE FUNCTION update_transcripts_updated_at()
+        RETURNS TRIGGER AS $$
+        BEGIN
+          NEW.updated_at = CURRENT_TIMESTAMP;
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      `);
+
+      await pool.query(`
+        DROP TRIGGER IF EXISTS transcripts_updated_at_trigger ON transcripts;
+      `);
+
+      await pool.query(`
+        CREATE TRIGGER transcripts_updated_at_trigger
+          BEFORE UPDATE ON transcripts
+          FOR EACH ROW
+          EXECUTE FUNCTION update_transcripts_updated_at();
       `);
       console.log("Database migrations completed successfully");
     } catch (migrationError) {

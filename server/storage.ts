@@ -270,6 +270,7 @@ class Storage {
         language,
         userId: userId ? parseInt(userId) : null,
         audioFileName: audioFileName || null,
+        filename: audioFileName || null,  // Also populate filename field
         duration: duration || null,
         audioHash: audioHash || null,
       };
@@ -369,7 +370,10 @@ class Storage {
       const db = await this.getDb();
       await db
         .update(transcripts)
-        .set({ createdAt: new Date() })
+        .set({ 
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
         .where(eq(transcripts.id, parseInt(id)));
       logger.info('storage', `Updated timestamp for transcript ${id}`);
     } catch (error) {
