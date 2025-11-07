@@ -212,6 +212,9 @@ export async function registerRoutes(app: Express): Promise<void> {
           if (existingTranscript) {
             fs.unlinkSync(req.file.path);
 
+            // Update the timestamp to move this transcript to the top of the history
+            await storage.updateTranscriptTimestamp(existingTranscript.id.toString());
+
             return res.json({
               transcript: existingTranscript.text,
               language: existingTranscript.language,
@@ -597,10 +600,17 @@ export async function registerRoutes(app: Express): Promise<void> {
       const userRole = req.session.role;
       const userId = req.session.userId?.toString();
       
-      // Admin can see all analyses, users can only see their own
-      const filterUserId = userRole === "admin" ? undefined : userId;
+      let analyses;
       
-      const analyses = await storage.getAllAdvancedAnalyses(filterUserId);
+      // Admin can see all analyses, users can only see their own recent 5
+      if (userRole === "admin") {
+        analyses = await storage.getAllAdvancedAnalyses();
+      } else if (userId) {
+        analyses = await storage.getRecentAdvancedAnalyses(userId, 5);
+      } else {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      
       res.json(analyses);
     } catch (error) {
       console.error("Get advanced analyses error:", error);
@@ -708,10 +718,17 @@ export async function registerRoutes(app: Express): Promise<void> {
       const userRole = req.session.role;
       const userId = req.session.userId?.toString();
       
-      // Admin can see all analyses, users can only see their own
-      const filterUserId = userRole === "admin" ? undefined : userId;
+      let analyses;
       
-      const analyses = await storage.getAllAnalyses(filterUserId);
+      // Admin can see all analyses, users can only see their own recent 5
+      if (userRole === "admin") {
+        analyses = await storage.getAllAnalyses();
+      } else if (userId) {
+        analyses = await storage.getRecentAnalyses(userId, 5);
+      } else {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      
       res.json(analyses);
     } catch (error) {
       console.error("Get analyses error:", error);
