@@ -311,7 +311,7 @@ class Storage {
         .select()
         .from(transcripts)
         .where(eq(transcripts.userId, parseInt(userId)))
-        .orderBy(desc(transcripts.createdAt));
+        .orderBy(desc(transcripts.updatedAt));
 
       // Keep only the last MAX_STORED_TRANSCRIPTS, delete the rest
       if (userTranscripts.length > Storage.MAX_STORED_TRANSCRIPTS) {
@@ -340,7 +340,7 @@ class Storage {
         .select()
         .from(transcripts)
         .where(eq(transcripts.userId, parseInt(userId)))
-        .orderBy(desc(transcripts.createdAt))
+        .orderBy(desc(transcripts.updatedAt))
         .limit(limit);
       
       return results;
@@ -368,10 +368,10 @@ class Storage {
   async updateTranscriptTimestamp(id: string): Promise<void> {
     try {
       const db = await this.getDb();
-      // Note: updatedAt is automatically updated by database trigger
+      // Update updatedAt timestamp (also automatically updated by database trigger)
       await db
         .update(transcripts)
-        .set({ createdAt: new Date() })
+        .set({ updatedAt: new Date() })
         .where(eq(transcripts.id, parseInt(id)));
       logger.info('storage', `Updated timestamp for transcript ${id}`);
     } catch (error) {
