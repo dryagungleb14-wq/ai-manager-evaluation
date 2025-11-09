@@ -311,7 +311,7 @@ class Storage {
         .select()
         .from(transcripts)
         .where(eq(transcripts.userId, parseInt(userId)))
-        .orderBy(desc(transcripts.createdAt));
+        .orderBy(desc(transcripts.updatedAt));
 
       // Keep only the last MAX_STORED_TRANSCRIPTS, delete the rest
       if (userTranscripts.length > Storage.MAX_STORED_TRANSCRIPTS) {
@@ -340,7 +340,7 @@ class Storage {
         .select()
         .from(transcripts)
         .where(eq(transcripts.userId, parseInt(userId)))
-        .orderBy(desc(transcripts.createdAt))
+        .orderBy(desc(transcripts.updatedAt))
         .limit(limit);
       
       return results;
